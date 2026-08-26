@@ -1,0 +1,31 @@
+{
+    "name": "Forms",
+    "alias": "forms",
+    "composer_package": "koakademy/forms",
+    "version": "1.0.0",
+    "description": "Configurable online forms, surveys, evaluations, and secure record-linked submissions.",
+    "author": "KoAkademy contributors",
+    "license": "AGPL-3.0-or-later",
+    "requires": {
+        "core": ">=1.22.0",
+        "php": ">=8.5",
+        "modules": {}
+    },
+    "compatibility": {
+        "laravel": "^13.0",
+        "filament": "^5.0"
+    },
+    "keywords": [
+        "forms",
+        "surveys",
+        "evaluations",
+        "student-information"
+    ],
+    "priority": 0,
+    "providers": [
+        "Modules\\Forms\\Providers\\FormsServiceProvider"
+    ],
+    "files": [],
+    "repository": "https://github.com/yukazakiri/koakademy-module-forms",
+    "homepage": "https://github.com/yukazakiri/koakademy-module-forms"
+}

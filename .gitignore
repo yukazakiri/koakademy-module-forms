@@ -1,0 +1,8 @@
+/vendor/
+/node_modules/
+.env
+.env.*
+!.env.example
+/storage/
+/bootstrap/cache/
+phpunit.xml.cache
