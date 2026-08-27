@@ -4,18 +4,17 @@ declare(strict_types=1);
 
 namespace Modules\Forms\Services;
 
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use JsonException;
+use Modules\Forms\Contracts\FormsInvitationTargetProvider;
 use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Contracts\FormsTenantResolver;
 use Modules\Forms\Enums\FormResponseStatus;
 use Modules\Forms\Models\Form;
+use Modules\Forms\Models\FormInvitation;
 use Modules\Forms\Models\FormResponse;
 use Modules\Forms\Models\FormResponseLink;
-use Modules\Forms\Models\FormResponseRevision;
 
 final class FormResponseService
 {
@@ -24,21 +23,41 @@ final class FormResponseService
         private readonly FormsModelRegistry $models,
         private readonly FormsTenantResolver $tenantResolver,
         private readonly FormsAuditService $audit,
+        private readonly FormAnswerService $answers,
+        private readonly FormMappingService $mapping,
+        private readonly FormsInvitationTargetProvider $invitationTargets,
     ) {}
 
     /** @param array<string, mixed> $validated */
-    public function submit(Form $form, array $validated, ?object $user = null): FormResponse
+    public function submit(Form $form, array $validated, ?object $user = null, ?FormInvitation $invitation = null): FormResponse
     {
         if (! $form->isOpen()) {
             throw ValidationException::withMessages(['form' => 'This form is no longer accepting responses.']);
         }
 
         $answers = $this->definitions->normalizeAnswers($form, $validated['answers'] ?? []);
-        $email = $this->normalizeIdentifier($validated['respondent_email'] ?? null);
+        $email = $invitation instanceof FormInvitation
+            ? $this->normalizeIdentifier($invitation->recipient_email)
+            : $this->normalizeIdentifier($validated['respondent_email'] ?? null);
         $identifier = $this->normalizeIdentifier($validated['respondent_identifier'] ?? null);
         $userId = data_get($user, 'id');
 
-        return DB::transaction(function () use ($form, $answers, $email, $identifier, $userId, $user): FormResponse {
+        return DB::transaction(function () use ($form, $answers, $email, $identifier, $userId, $user, $invitation): FormResponse {
+            if ($invitation instanceof FormInvitation) {
+                $invitation = FormInvitation::query()
+                    ->whereKey($invitation->getKey())
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $invitation instanceof FormInvitation || ! $invitation->isUsable()) {
+                    throw ValidationException::withMessages(['form' => 'This invitation is no longer available.']);
+                }
+
+                if ($this->invitationTargets->resolve($invitation) === null) {
+                    throw ValidationException::withMessages(['form' => 'The linked student record is no longer available.']);
+                }
+            }
+
             $response = $this->findExisting($form, $userId, $email, $identifier);
             $allowResubmit = (bool) data_get($form->settings, 'allow_resubmit', false);
 
@@ -81,8 +100,20 @@ final class FormResponseService
             ]);
 
             $response->update(['latest_revision' => $revision]);
-            $this->createLinks($form, $response, $user, $email, $identifier);
+            $this->createLinks($form, $response, $user, $email, $identifier, $invitation);
             $this->audit->record($form, 'response_submitted', $response, ['revision' => $revision]);
+
+            if (data_get($form->settings, 'mapping_mode') === 'auto_fill_empty') {
+                $response = $this->mapping->apply($response->load('form.fields', 'links'), false, $user);
+            }
+
+            if ($invitation instanceof FormInvitation) {
+                $invitation->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                    'response_id' => $response->getKey(),
+                ]);
+            }
 
             return $response->fresh('revisions', 'links');
         });
@@ -91,18 +122,7 @@ final class FormResponseService
     /** @return array<string, mixed> */
     public function latestAnswers(FormResponse $response): array
     {
-        $revision = $response->revisions()->first();
-        if (! $revision instanceof FormResponseRevision) {
-            return [];
-        }
-
-        try {
-            $decoded = json_decode(Crypt::decryptString($revision->answer_payload), true, 512, JSON_THROW_ON_ERROR);
-        } catch (\Throwable) {
-            return [];
-        }
-
-        return is_array($decoded) ? $decoded : [];
+        return $this->answers->latestAnswers($response);
     }
 
     private function findExisting(Form $form, ?string $userId, ?string $email, ?string $identifier): ?FormResponse
@@ -124,7 +144,7 @@ final class FormResponseService
         return null;
     }
 
-    private function createLinks(Form $form, FormResponse $response, ?object $user, ?string $email, ?string $identifier): void
+    private function createLinks(Form $form, FormResponse $response, ?object $user, ?string $email, ?string $identifier, ?FormInvitation $invitation = null): void
     {
         $modelKeys = $form->fields
             ->map(fn ($field): ?string => is_array($field->mapping) ? ($field->mapping['model'] ?? null) : null)
@@ -133,20 +153,24 @@ final class FormResponseService
             ->values();
 
         foreach ($modelKeys as $modelKey) {
-            $record = $user !== null
+            $record = $invitation instanceof FormInvitation
+                ? $this->invitationTargets->resolve($invitation)
+                : ($user !== null
                 ? $this->models->resolveForUser($modelKey, $user)
                 : (($identifier !== null && $form->identity_type !== null)
                     ? $this->models->resolveByIdentifier($modelKey, $form->identity_type, $identifier)
                     : ($email !== null && $form->identity_type !== null
                         ? $this->models->resolveByIdentifier($modelKey, $form->identity_type, $email)
-                        : null));
+                        : null)));
 
             FormResponseLink::query()->updateOrCreate(
                 ['form_response_id' => $response->getKey(), 'model_key' => $modelKey],
                 [
                     'model_type' => $record === null ? null : $record::class,
                     'model_id' => $record === null ? null : (string) $record->getKey(),
-                    'match_method' => $user !== null ? 'authenticated_user' : ($record === null ? null : 'guest_identifier'),
+                    'match_method' => $invitation instanceof FormInvitation
+                        ? 'invitation'
+                        : ($user !== null ? 'authenticated_user' : ($record === null ? null : 'guest_identifier')),
                     'status' => $record === null ? 'unmatched' : 'pending',
                     'error_message' => $record === null ? 'No approved record matched the submitted identity.' : null,
                 ],
@@ -168,17 +192,11 @@ final class FormResponseService
     /** @param array<string, mixed> $payload */
     private function encrypt(array $payload): string
     {
-        return Crypt::encryptString($this->encode($payload));
+        return $this->answers->encrypt($payload);
     }
 
     private function encode(mixed $payload): string
     {
-        try {
-            return json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        } catch (JsonException $exception) {
-            report($exception);
-
-            throw ValidationException::withMessages(['answers' => 'The response could not be stored.']);
-        }
+        return $this->answers->encode($payload);
     }
 }

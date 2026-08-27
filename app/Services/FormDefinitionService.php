@@ -10,20 +10,33 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
+use Modules\Forms\Contracts\FormsFieldSuggestionProvider;
+use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Models\FormField;
 
 final class FormDefinitionService
 {
+    public function __construct(
+        private readonly FormsModelRegistry $models,
+        private readonly FormsFieldSuggestionProvider $suggestions,
+    ) {}
+
     /** @return list<string> */
     public function supportedTypes(): array
     {
-        return ['text', 'textarea', 'email', 'number', 'date', 'select', 'radio', 'checkbox', 'yes_no', 'file', 'rating'];
+        return ['text', 'textarea', 'email', 'phone', 'number', 'year', 'date', 'select', 'radio', 'checkbox', 'yes_no', 'file', 'rating'];
     }
 
     /** @return array<string, mixed> */
-    public function publicPayload(Form $form): array
+    public function publicPayload(Form $form, ?object $record = null): array
     {
+        $fields = $form->fields
+            ->filter(fn (FormField $field): bool => $record === null || $this->shouldRenderField($field, $record))
+            ->map(fn (FormField $field): array => $this->fieldPayload($field, $record))
+            ->values()
+            ->all();
+
         return [
             'id' => $form->getKey(),
             'slug' => $form->slug,
@@ -32,12 +45,12 @@ final class FormDefinitionService
             'access_mode' => $form->access_mode->value,
             'identity_type' => $form->identity_type,
             'settings' => $form->settings ?? [],
-            'fields' => $form->fields->map(fn (FormField $field): array => $this->fieldPayload($field))->values()->all(),
+            'fields' => $fields,
         ];
     }
 
     /** @return array<string, mixed> */
-    public function fieldPayload(FormField $field): array
+    public function fieldPayload(FormField $field, ?object $record = null): array
     {
         $options = $field->options ?? [];
         if ($field->type === 'yes_no' && $options === []) {
@@ -52,15 +65,22 @@ final class FormDefinitionService
             'required' => $field->required,
             'options' => $options,
             'visibility' => $field->visibility,
+            'section' => $field->section,
+            'presentation' => $field->presentation ?? [],
+            'behavior' => $field->behavior ?? [],
+            'suggestions' => $this->suggestions->suggestions($field),
         ];
     }
 
     /** @return array<string, array<int, mixed>> */
-    public function validationRules(Form $form): array
+    public function validationRules(Form $form, ?object $record = null): array
     {
         $rules = ['answers' => ['array']];
 
         foreach ($form->fields as $field) {
+            if ($record !== null && ! $this->shouldRenderField($field, $record)) {
+                continue;
+            }
             $key = 'answers.'.$field->field_key;
             $fieldRules = [$field->required ? 'required' : 'nullable'];
 
@@ -84,6 +104,8 @@ final class FormDefinitionService
             'text', 'textarea' => ['string'],
             'email' => ['email'],
             'number', 'rating' => ['numeric'],
+            'year' => ['integer', 'between:1900,'.now()->year],
+            'phone' => ['string', 'regex:/^\+?[0-9 ()-]{7,30}$/'],
             'date' => ['date'],
             'select', 'radio' => [Rule::in(array_keys($field->options ?? []))],
             'yes_no' => [Rule::in(array_keys($field->options ?: ['yes' => 'Yes', 'no' => 'No']))],
@@ -154,6 +176,26 @@ final class FormDefinitionService
             'contains' => is_array($actual) && in_array($expected, $actual, true),
             default => $actual == $expected,
         };
+    }
+
+    private function shouldRenderField(FormField $field, object $record): bool
+    {
+        $behavior = is_array($field->behavior) ? $field->behavior : [];
+        if (($behavior['missing_only'] ?? false) !== true) {
+            return true;
+        }
+
+        $mapping = $field->mapping;
+        if (! is_array($mapping) || ! is_string($mapping['model'] ?? null) || ! is_string($mapping['path'] ?? null)) {
+            return true;
+        }
+
+        return ! $this->isFilled($this->models->read($record, $mapping['path']));
+    }
+
+    private function isFilled(mixed $value): bool
+    {
+        return $value !== null && $value !== '' && $value !== [];
     }
 
     /** @return list<array<string, mixed>> */

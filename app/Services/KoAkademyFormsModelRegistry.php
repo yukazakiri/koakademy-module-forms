@@ -10,11 +10,14 @@ use App\Models\StudentEducationInfo;
 use App\Models\StudentParentsInfo;
 use App\Models\StudentsPersonalInfo;
 use App\Support\RegistrarStudentProfileWorkbook;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
+use Modules\Forms\Contracts\FormsLockableModelRegistry;
 use Modules\Forms\Contracts\FormsModelRegistry;
 
-final class KoAkademyFormsModelRegistry implements FormsModelRegistry
+final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, FormsModelRegistry
 {
     public function models(): array
     {
@@ -29,16 +32,29 @@ final class KoAkademyFormsModelRegistry implements FormsModelRegistry
             return [];
         }
 
+        $workbook = app(RegistrarStudentProfileWorkbook::class);
+
         return array_map(
-            static fn (array $field): array => [
+            fn (array $field): array => [
                 'key' => (string) $field['key'],
                 'label' => (string) $field['label'],
                 'type' => (string) $field['type'],
                 'options' => $field['options'] ?? [],
                 'read_paths' => $field['read'] ?? [],
-                'write_paths' => $field['write'] ?? [],
+                'write_paths' => $this->availableWritePaths($field),
+                'group' => $field['group'] ?? 'Student Profile',
+                'max' => $field['max'] ?? null,
+                'suggestible' => in_array((string) $field['key'], [
+                    'birthplace',
+                    'region_of_origin',
+                    'province_of_origin',
+                    'city_of_origin',
+                    'religion',
+                    'nationality',
+                    'civil_status',
+                ], true),
             ],
-            app(RegistrarStudentProfileWorkbook::class)->fields(),
+            $workbook->fields(),
         );
     }
 
@@ -94,6 +110,7 @@ final class KoAkademyFormsModelRegistry implements FormsModelRegistry
             'education' => data_get($record->studentEducationInfo, $attribute),
             'personal' => data_get($record->personalInfo, $attribute),
             'contacts' => Arr::get(is_array($record->contacts ?? null) ? $record->contacts : [], $attribute),
+            'details' => Arr::get(is_array($record->profile_details ?? null) ? $record->profile_details : [], $attribute),
             default => null,
         };
 
@@ -118,6 +135,14 @@ final class KoAkademyFormsModelRegistry implements FormsModelRegistry
             return;
         }
 
+        if ($scope === 'details') {
+            $details = is_array($record->profile_details ?? null) ? $record->profile_details : [];
+            Arr::set($details, $attribute, $value);
+            $record->setAttribute('profile_details', $details);
+
+            return;
+        }
+
         $related = match ($scope) {
             'contact' => $this->related($record, 'studentContactsInfo', StudentContact::class, 'student_contact_id'),
             'parent' => $this->related($record, 'studentParentInfo', StudentParentsInfo::class, 'student_parent_info'),
@@ -135,8 +160,53 @@ final class KoAkademyFormsModelRegistry implements FormsModelRegistry
     public function persist(object $record): void
     {
         if ($record instanceof Model) {
+            if ($record instanceof Student && $record->isDirty('birth_date') && $record->birth_date !== null) {
+                $record->setAttribute('age', Carbon::parse((string) $record->birth_date)->age);
+            }
+
             $record->save();
         }
+    }
+
+    public function lock(object $record): object
+    {
+        if (! $record instanceof Model) {
+            return $record;
+        }
+
+        return $record->newQuery()
+            ->with(['studentContactsInfo', 'studentParentInfo', 'studentEducationInfo', 'personalInfo'])
+            ->whereKey($record->getKey())
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
+    /** @param array<string, mixed> $field
+     *  @return list<string> */
+    private function availableWritePaths(array $field): array
+    {
+        $paths = collect($field['write'] ?? [])
+            ->filter(fn (mixed $path): bool => is_string($path))
+            ->filter(fn (string $path): bool => $this->isPhysicalPath($path))
+            ->values()
+            ->all();
+
+        return $paths !== [] ? $paths : ['details.'.(string) $field['key']];
+    }
+
+    private function isPhysicalPath(string $path): bool
+    {
+        [$scope, $attribute] = array_pad(explode('.', $path, 2), 2, '');
+        $table = match ($scope) {
+            'student' => 'students',
+            'contact' => 'student_contacts',
+            'parent' => 'student_parents_info',
+            'education' => 'student_education_info',
+            'personal' => 'students_personal_info',
+            default => null,
+        };
+
+        return $table !== null && Schema::hasColumn($table, $attribute);
     }
 
     private function related(Model $record, string $relation, string $class, string $foreignKey): ?Model

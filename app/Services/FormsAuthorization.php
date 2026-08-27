@@ -15,6 +15,12 @@ final class FormsAuthorization
         'responses' => ['forms.responses.view', 'ViewAny:FormResponse'],
         'export' => ['forms.responses.export', 'Export:FormResponse'],
         'apply' => ['forms.mappings.apply', 'Apply:FormResponseMapping'],
+        'templates.view' => ['forms.templates.view', 'ViewAny:FormTemplate'],
+        'templates.create' => ['forms.templates.create', 'Create:FormTemplate'],
+        'templates.update' => ['forms.templates.update', 'Update:FormTemplate'],
+        'templates.delete' => ['forms.templates.delete', 'Delete:FormTemplate'],
+        'invitations.view' => ['forms.invitations.view', 'ViewAny:FormInvitation'],
+        'invitations.create' => ['forms.invitations.create', 'Create:FormInvitation'],
     ];
 
     public function allows(mixed $user, string $ability): bool

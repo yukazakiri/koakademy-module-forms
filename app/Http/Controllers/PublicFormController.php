@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Modules\Forms\Enums\FormAccessMode;
 use Modules\Forms\Http\Requests\SubmitFormRequest;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Services\FormDefinitionService;
@@ -23,7 +24,7 @@ final class PublicFormController
 
     public function show(Request $request, Form $form): Response
     {
-        abort_unless($form->isOpen(), 404);
+        abort_unless($form->isOpen() && $form->access_mode !== FormAccessMode::Invitation, 404);
 
         return Inertia::render('Forms/PublicShow', [
             'form' => $this->definitions->publicPayload($form->load('fields')),

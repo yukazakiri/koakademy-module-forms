@@ -20,7 +20,7 @@ application image do that.
 Run the following commands from the host application's repository root:
 
     composer config repositories.koakademy composer https://yukazakiri.github.io/koakademy-modules
-    composer require koakademy/forms:^1.0
+    composer require koakademy/forms:^1.1
     php artisan migrate --force
     php artisan optimize:clear
 
@@ -37,6 +37,35 @@ The host's normal frontend build must include Composer module pages:
 Use the build and release hooks supplied by the host platform. Run the
 migration once, clear the application cache, and restart or roll every
 application worker.
+
+## Features
+
+- Authenticated, guest email/student ID, or anonymous responses.
+- Text, long text, email, phone, number, year, date, select, radio, checkbox, yes/no, file, and rating fields.
+- Response revision history, duplicate-response policy, close dates, CSV export, and protected uploads.
+- Review-before-apply workflow for model mappings.
+- Reusable built-in and tenant-scoped form templates with cloning and editing.
+- Secure, one-time, 30-day record-bound email invitations for profile completion.
+- Searchable safe suggestions for common profile values; suggestions never expose student identities.
+- Sensitive answer, invitation, blank-only application, and skipped-field metadata captured in an audit trail.
+
+## Student Profile Completion
+
+The built-in **Student Profile Completion** template is generated from the host
+application's approved student profile catalog. It renders only fields that are
+still blank for the invited student and groups them into short sections. A
+submission is bound to its invitation on the server, stored encrypted, and
+applies only values that are still blank while the target record is locked.
+
+Existing normalized student and relation columns are used when available.
+Sparse or evolving fields are stored under stable keys in the host's
+`students.profile_details` JSON column, so registrar workbook exports and
+future analytics can read them without changing the version-1 workbook layout.
+
+Administrators must explicitly open **Online Forms → Invitations** and queue a
+batch. Deploying the package never sends email. Delivery is queued through the
+host mailer; resending revokes the previous link, and completed or expired
+links cannot be reused.
 
 ### Docker Compose
 
@@ -110,8 +139,8 @@ deployed.
    - **Guests with email or ID** asks for the configured email address or
      Student ID and can resolve the matching student.
    - **Anyone anonymously** records no identity.
-4. Add questions. Supported types are text, long text, email, number, date,
-   select, radio, checkbox, yes/no, file, and rating.
+4. Add questions. Supported types are text, long text, email, phone, number,
+   year, date, select, radio, checkbox, yes/no, file, and rating.
 5. Give each question a stable key such as guardian_name or origin. Mark
    required and sensitive questions deliberately.
 6. Save the draft, review the publishing checklist, and choose **Publish**.
@@ -168,7 +197,10 @@ Other host applications can bind these contracts in a service provider:
 The model registry must expose an allowlisted model and writable field catalog,
 resolve records by authenticated user or approved identifier, and implement
 read/write persistence. The tenant resolver must return the current tenant
-key. Do not accept model names or write paths directly from public requests.
+key. Optional hosts may also bind `FormsInvitationTargetProvider`,
+`FormsFieldSuggestionProvider`, and `FormsLockableModelRegistry`; otherwise the
+module falls back to no invitations, no suggestions, and review-only mappings.
+Do not accept model names or write paths directly from public requests.
 
 ## Troubleshooting
 

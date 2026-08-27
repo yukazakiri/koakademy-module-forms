@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import formsRoutes from "@/routes/administrators/forms";
+import publicForms from "@/routes/forms";
 import type { User } from "@/types/user";
 import { Head, Link } from "@inertiajs/react";
 import {
@@ -45,6 +46,7 @@ const accessLabels: Record<string, string> = {
   authenticated: "Authenticated",
   guest_identifier: "Guest identifier",
   anonymous: "Anonymous",
+  invitation: "Personal invitation",
 };
 
 export default function FormsIndex({ user, forms }: Props) {
@@ -71,12 +73,10 @@ export default function FormsIndex({ user, forms }: Props) {
                 that stay connected to the right records.
               </p>
             </div>
-            <Button asChild size="lg">
-              <Link href={formsRoutes.create.url()}>
-                <FilePlus2 className="size-4" />
-                Create form
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="lg"><Link href={formsRoutes.templates.index.url()}><FormInput className="size-4" /> Templates</Link></Button>
+              <Button asChild size="lg"><Link href={formsRoutes.create.url()}><FilePlus2 className="size-4" /> Create form</Link></Button>
+            </div>
           </div>
         </header>
 
@@ -192,10 +192,13 @@ export default function FormsIndex({ user, forms }: Props) {
                         View responses
                       </Link>
                     </Button>
+                    {form.access_mode === "invitation" && (
+                      <Button asChild variant="outline" size="sm"><Link href={formsRoutes.invitations.index.url(form.id)}><ShieldCheck className="size-3.5" /> Invitations</Link></Button>
+                    )}
                     {form.status === "published" && (
                       <Button asChild variant="ghost" size="sm">
                         <a
-                          href={`/forms/${form.slug}`}
+                          href={publicForms.show.url(form.slug)}
                           target="_blank"
                           rel="noreferrer"
                         >

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Forms\Database\Factories\FormFactory;
 use Modules\Forms\Enums\FormAccessMode;
@@ -23,6 +24,7 @@ final class Form extends Model
     protected $fillable = [
         'tenant_key',
         'created_by',
+        'template_id',
         'title',
         'slug',
         'description',
@@ -46,6 +48,11 @@ final class Form extends Model
     public function fields(): HasMany
     {
         return $this->hasMany(FormField::class)->orderBy('position');
+    }
+
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(FormTemplate::class, 'template_id');
     }
 
     /** @return HasMany<FormResponse, $this> */

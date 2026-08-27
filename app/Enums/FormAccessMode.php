@@ -9,4 +9,5 @@ enum FormAccessMode: string
     case Authenticated = 'authenticated';
     case GuestIdentifier = 'guest_identifier';
     case Anonymous = 'anonymous';
+    case Invitation = 'invitation';
 }

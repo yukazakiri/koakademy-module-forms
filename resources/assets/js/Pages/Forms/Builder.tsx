@@ -30,10 +30,13 @@ interface FormField {
   label: string;
   type: string;
   description: string | null;
+  section: string | null;
   required: boolean;
   options: Record<string, string>;
   validation: Record<string, string | number>;
   visibility: { field?: string; operator?: string; value?: string } | null;
+  presentation: { control?: string; placeholder?: string; input_mode?: string; suggestion_source?: string; suggestion_limit?: number; unit?: string };
+  behavior: { missing_only?: boolean };
   mapping: { model?: string; path?: string } | null;
   is_sensitive: boolean;
 }
@@ -45,7 +48,7 @@ interface FormData {
   access_mode: string;
   identity_type: string;
   closes_at: string;
-  settings: { allow_resubmit: boolean; confirmation_message?: string };
+  settings: { allow_resubmit: boolean; confirmation_message?: string; mapping_mode?: string; invitation_expiry_days?: number };
   fields: FormField[];
 }
 
@@ -64,7 +67,9 @@ const typeLabels: Record<string, string> = {
   text: "Short text",
   textarea: "Long text",
   email: "Email",
+  phone: "Phone",
   number: "Number",
+  year: "Year",
   date: "Date",
   select: "Dropdown",
   radio: "Single choice",
@@ -80,12 +85,15 @@ function blankField(position: number): FormField {
     label: `Question ${position + 1}`,
     type: "text",
     description: null,
+    section: null,
     required: false,
     options: {},
     validation: {},
     visibility: null,
     mapping: null,
     is_sensitive: false,
+    presentation: { control: "auto", input_mode: "text", suggestion_source: "none" },
+    behavior: { missing_only: false },
   };
 }
 
@@ -100,6 +108,8 @@ function initialData(form: Props["form"]): FormData {
     settings: {
       allow_resubmit: Boolean(form?.settings?.allow_resubmit),
       confirmation_message: form?.settings?.confirmation_message ?? "",
+      mapping_mode: form?.settings?.mapping_mode ?? "review",
+      invitation_expiry_days: Number(form?.settings?.invitation_expiry_days ?? 30),
     },
     fields: form?.fields?.length
       ? (form.fields as FormField[])
@@ -181,9 +191,9 @@ export default function FormsBuilder({
             <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
               {isEditing ? "Shape the experience" : "Create a new form"}
             </h1>
-            <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
-              Keep questions clear, map only approved fields, and review record
-              changes before they are applied.
+              <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
+              Keep questions clear, map only approved fields, and choose whether
+              linked answers are reviewed or fill blanks automatically.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -278,6 +288,7 @@ export default function FormsBuilder({
                       Guests with email or ID
                     </option>
                     <option value="anonymous">Anyone anonymously</option>
+                    <option value="invitation">Personal email invitations</option>
                   </select>
                 </div>
                 {formState.data.access_mode === "guest_identifier" && (
@@ -294,6 +305,12 @@ export default function FormsBuilder({
                       <option value="email">Email address</option>
                       <option value="student_id">Student ID</option>
                     </select>
+                  </div>
+                )}
+                {formState.data.access_mode === "invitation" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="invitation-expiry">Invitation expiry (days)</Label>
+                    <Input id="invitation-expiry" type="number" min={1} max={90} value={formState.data.settings.invitation_expiry_days ?? 30} onChange={(event) => formState.setData("settings", { ...formState.data.settings, invitation_expiry_days: Number(event.target.value) })} />
                   </div>
                 )}
                 <label className="text-muted-foreground flex items-center gap-2 text-sm sm:col-span-2">
@@ -324,6 +341,13 @@ export default function FormsBuilder({
                     }
                     placeholder="Your response has been recorded."
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mapping-mode">Linked record behavior</Label>
+                  <select id="mapping-mode" className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm" value={formState.data.settings.mapping_mode ?? "review"} onChange={(event) => formState.setData("settings", { ...formState.data.settings, mapping_mode: event.target.value })}>
+                    <option value="review">Review before applying</option>
+                    <option value="auto_fill_empty">Apply blank fields immediately</option>
+                  </select>
                 </div>
               </CardContent>
             </Card>
@@ -407,6 +431,10 @@ export default function FormsBuilder({
                       }
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`field-section-${index}`}>Section</Label>
+                    <Input id={`field-section-${index}`} value={field.section ?? ""} onChange={(event) => updateField(index, { section: event.target.value })} placeholder="Personal details" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor={`field-type-${index}`}>Answer type</Label>
@@ -571,6 +599,13 @@ export default function FormsBuilder({
                       </div>
                     </div>
                   )}
+                  <div className="border-border/70 bg-muted/20 grid gap-4 rounded-lg border p-4 sm:col-span-2 sm:grid-cols-2">
+                    <div className="space-y-2"><Label htmlFor={`field-control-${index}`}>Presentation</Label><select id={`field-control-${index}`} className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm" value={field.presentation?.control ?? "auto"} onChange={(event) => updateField(index, { presentation: { ...field.presentation, control: event.target.value } })}><option value="auto">Automatic</option><option value="input">Text input</option><option value="select">Select</option><option value="radio_cards">Radio cards</option><option value="combobox">Searchable suggestions</option></select></div>
+                    <div className="space-y-2"><Label htmlFor={`field-placeholder-${index}`}>Placeholder</Label><Input id={`field-placeholder-${index}`} value={field.presentation?.placeholder ?? ""} onChange={(event) => updateField(index, { presentation: { ...field.presentation, placeholder: event.target.value } })} placeholder="Start typing…" /></div>
+                    <div className="space-y-2"><Label htmlFor={`field-input-mode-${index}`}>Mobile keyboard</Label><select id={`field-input-mode-${index}`} className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm" value={field.presentation?.input_mode ?? "text"} onChange={(event) => updateField(index, { presentation: { ...field.presentation, input_mode: event.target.value } })}><option value="text">Text</option><option value="tel">Phone</option><option value="numeric">Numbers</option><option value="decimal">Decimal</option><option value="email">Email</option></select></div>
+                    <div className="space-y-2"><Label htmlFor={`field-unit-${index}`}>Unit (optional)</Label><Input id={`field-unit-${index}`} value={field.presentation?.unit ?? ""} onChange={(event) => updateField(index, { presentation: { ...field.presentation, unit: event.target.value } })} placeholder="cm, kg" /></div>
+                    <label className="text-muted-foreground flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={Boolean(field.behavior?.missing_only)} onChange={(event) => updateField(index, { behavior: { ...field.behavior, missing_only: event.target.checked } })} /> Show only when the linked record is blank</label>
+                  </div>
                   {formState.errors[`fields.${index}.label`] && (
                     <p className="text-destructive text-xs sm:col-span-2">
                       {formState.errors[`fields.${index}.label`]}
@@ -611,12 +646,17 @@ export default function FormsBuilder({
               </CardContent>
             </Card>
             {isEditing && form?.status === "published" && (
-              <Button
+                <Button
                 type="button"
                 variant="outline"
                 onClick={() => window.open(`/forms/${data.slug}`, "_blank")}
               >
                 <Eye className="size-4" /> Preview public form
+              </Button>
+            )}
+            {isEditing && form?.id && (
+              <Button type="button" variant="outline" onClick={() => { const name = window.prompt("Save this form as a template", data.title); if (name?.trim()) router.post(formsRoutes.templates.save.url(form.id), { name }, { preserveScroll: true }); }}>
+                Save as template
               </Button>
             )}
           </aside>

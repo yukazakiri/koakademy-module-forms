@@ -21,6 +21,7 @@ use Modules\Forms\Services\FormMappingService;
 use Modules\Forms\Services\FormResponseService;
 use Modules\Forms\Services\FormsAuditService;
 use Modules\Forms\Services\FormsAuthorization;
+use Modules\Forms\Services\FormTemplateService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class FormAdminController
@@ -34,6 +35,7 @@ final class FormAdminController
         private readonly FormsAuditService $audit,
         private readonly FormMappingService $mapping,
         private readonly FormResponseService $responses,
+        private readonly FormTemplateService $templates,
     ) {}
 
     public function index(Request $request): InertiaResponse
@@ -63,6 +65,7 @@ final class FormAdminController
             'supported_types' => $this->definitions->supportedTypes(),
             'models' => $this->models->models(),
             'model_fields' => $this->modelFields(),
+            'templates' => $this->templates->catalog(),
         ]);
     }
 
@@ -85,6 +88,7 @@ final class FormAdminController
             'supported_types' => $this->definitions->supportedTypes(),
             'models' => $this->models->models(),
             'model_fields' => $this->modelFields(),
+            'templates' => $this->templates->catalog(),
         ]);
     }
 
@@ -138,7 +142,9 @@ final class FormAdminController
         $this->ensureTenant($form);
         abort_unless($response->form_id === $form->getKey(), 404);
 
-        $this->mapping->apply($response->load('form.fields', 'links'), $request->boolean('overwrite'), $request->user());
+        $overwrite = data_get($form->settings, 'mapping_mode', 'review') === 'review'
+            && $request->boolean('overwrite');
+        $this->mapping->apply($response->load('form.fields', 'links'), $overwrite, $request->user());
 
         return back()->with('success', 'Approved answers were applied to the linked record.');
     }
@@ -183,6 +189,7 @@ final class FormAdminController
     {
         return [
             'id' => $form->getKey(),
+            'template_id' => $form->template_id,
             'title' => $form->title,
             'slug' => $form->slug,
             'description' => $form->description,
@@ -199,10 +206,13 @@ final class FormAdminController
                         'label' => $field->label,
                         'type' => $field->type,
                         'description' => $field->description,
+                        'section' => $field->section,
                         'required' => $field->required,
                         'options' => $field->options ?? [],
                         'validation' => $field->validation ?? [],
                         'visibility' => $field->visibility,
+                        'presentation' => $field->presentation ?? [],
+                        'behavior' => $field->behavior ?? [],
                         'mapping' => $field->mapping,
                         'is_sensitive' => $field->is_sensitive,
                     ];
@@ -246,7 +256,7 @@ final class FormAdminController
     /** @return array<string, bool> */
     private function permissions(mixed $user): array
     {
-        return collect(['create', 'update', 'publish', 'responses', 'export', 'apply'])
+        return collect(['create', 'update', 'publish', 'responses', 'export', 'apply', 'invitations.view', 'invitations.create'])
             ->mapWithKeys(fn (string $ability): array => [$ability => $this->authorization->allows($user, $ability)])
             ->all();
     }

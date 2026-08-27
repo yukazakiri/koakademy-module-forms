@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Forms\Services;
 
 use Illuminate\Support\Facades\DB;
+use Modules\Forms\Contracts\FormsLockableModelRegistry;
 use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Models\FormResponse;
 use Modules\Forms\Models\FormResponseLink;
@@ -13,15 +14,16 @@ final class FormMappingService
 {
     public function __construct(
         private readonly FormsModelRegistry $models,
-        private readonly FormResponseService $responses,
+        private readonly FormAnswerService $answers,
         private readonly FormsAuditService $audit,
     ) {}
 
     public function apply(FormResponse $response, bool $overwrite = false, ?object $actor = null): FormResponse
     {
         return DB::transaction(function () use ($response, $overwrite, $actor): FormResponse {
-            $answers = $this->responses->latestAnswers($response);
+            $answers = $this->answers->latestAnswers($response);
             $applied = 0;
+            $skipped = [];
 
             foreach ($response->form->fields as $field) {
                 $mapping = $field->mapping;
@@ -39,8 +41,14 @@ final class FormMappingService
                     continue;
                 }
 
+                if ($this->models instanceof FormsLockableModelRegistry) {
+                    $record = $this->models->lock($record);
+                }
+
                 $value = $answers[$field->field_key];
                 if (! $overwrite && $this->isFilled($this->models->read($record, $mapping['path']))) {
+                    $skipped[] = $field->field_key;
+
                     continue;
                 }
 
@@ -66,6 +74,7 @@ final class FormMappingService
             $this->audit->record($response->form, 'response_mapping_applied', $response, [
                 'overwrite' => $overwrite,
                 'fields_applied' => $applied,
+                'fields_skipped' => $skipped,
             ]);
 
             return $response->fresh('form', 'revisions', 'links');
