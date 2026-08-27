@@ -72,6 +72,28 @@ final class FormDefinitionService
         ];
     }
 
+    /** @return array<string, mixed> */
+    public function prefillAnswers(Form $form, object $record): array
+    {
+        $answers = [];
+
+        foreach ($form->fields as $field) {
+            $mapping = $field->mapping;
+            if (! is_array($mapping) || ($mapping['model'] ?? null) !== 'student' || ! is_string($mapping['path'] ?? null)) {
+                continue;
+            }
+
+            $value = $this->models->read($record, $mapping['path']);
+            $value = $this->prefillValue($field, $value);
+
+            if ($value !== null) {
+                $answers[$field->field_key] = $value;
+            }
+        }
+
+        return $answers;
+    }
+
     /** @return array<string, array<int, mixed>> */
     public function validationRules(Form $form, ?object $record = null): array
     {
@@ -191,6 +213,32 @@ final class FormDefinitionService
         }
 
         return ! $this->isFilled($this->models->read($record, $mapping['path']));
+    }
+
+    private function prefillValue(FormField $field, mixed $value): mixed
+    {
+        if ($value instanceof \BackedEnum) {
+            $value = $value->value;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (is_array($value)) {
+            $values = array_values(array_filter(
+                array_map(static fn (mixed $item): ?string => is_scalar($item) ? (string) $item : null, $value),
+                static fn (?string $item): bool => $item !== null,
+            ));
+
+            return $values === [] ? null : $values;
+        }
+
+        if (is_bool($value)) {
+            return $field->type === 'yes_no' ? ($value ? 'yes' : 'no') : ($value ? '1' : '0');
+        }
+
+        return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
     }
 
     private function isFilled(mixed $value): bool

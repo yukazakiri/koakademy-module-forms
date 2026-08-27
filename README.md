@@ -40,7 +40,7 @@ application worker.
 
 ## Features
 
-- Authenticated, guest email/student ID, or anonymous responses.
+- Authenticated, guest email, verified Student ID + email, or anonymous responses.
 - Text, long text, email, phone, number, year, date, select, radio, checkbox, yes/no, file, and rating fields.
 - Response revision history, duplicate-response policy, close dates, CSV export, and protected uploads.
 - Review-before-apply workflow for model mappings.
@@ -136,8 +136,8 @@ deployed.
    confirmation message.
 3. Choose who can respond:
    - **Authenticated users** links the response to the signed-in account.
-   - **Guests with email or ID** asks for the configured email address or
-     Student ID and can resolve the matching student.
+   - **Guests with email or ID** asks for the configured email address, or
+     verifies both Student ID and registered email before resolving a student.
    - **Anyone anonymously** records no identity.
 4. Add questions. Supported types are text, long text, email, phone, number,
    year, date, select, radio, checkbox, yes/no, file, and rating.
@@ -167,7 +167,10 @@ information update form:
 5. Publish the form and share it with the intended respondents.
 
 Authenticated responses are linked to the user's student record. Guest
-responses use the configured email or Student ID to resolve a student.
+responses use the configured email or verified Student ID + registered email
+to resolve a student. Student-ID forms prefill only the form's approved Student
+mappings after verification; the same verification is repeated when the response
+is submitted. Do not use Student ID alone for forms that expose personal data.
 Anonymous responses remain unlinked unless a host integration supplies an
 approved identity workflow. Answers are stored first; they never update a
 student record merely because a mapping was configured.

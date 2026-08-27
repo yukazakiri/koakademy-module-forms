@@ -35,6 +35,10 @@ final class SubmitFormRequest extends FormRequest
             $rules[$key] = $form->identity_type === 'student_id'
                 ? ['required', 'string', 'max:100']
                 : ['required', 'email', 'max:255'];
+
+            if ($form->identity_type === 'student_id') {
+                $rules['respondent_email'] = ['required', 'email', 'max:255'];
+            }
         }
 
         return $rules;

@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use Modules\Forms\Contracts\FormsInvitationTargetProvider;
 use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Contracts\FormsTenantResolver;
+use Modules\Forms\Enums\FormAccessMode;
 use Modules\Forms\Enums\FormResponseStatus;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Models\FormInvitation;
@@ -26,6 +27,7 @@ final class FormResponseService
         private readonly FormAnswerService $answers,
         private readonly FormMappingService $mapping,
         private readonly FormsInvitationTargetProvider $invitationTargets,
+        private readonly FormGuestIdentityService $guestIdentities,
     ) {}
 
     /** @param array<string, mixed> $validated */
@@ -41,8 +43,12 @@ final class FormResponseService
             : $this->normalizeIdentifier($validated['respondent_email'] ?? null);
         $identifier = $this->normalizeIdentifier($validated['respondent_identifier'] ?? null);
         $userId = data_get($user, 'id');
+        $guestRecord = $form->access_mode === FormAccessMode::GuestIdentifier
+            && $form->identity_type === 'student_id'
+            ? $this->guestIdentities->resolve($form, (string) $identifier, (string) $email)
+            : null;
 
-        return DB::transaction(function () use ($form, $answers, $email, $identifier, $userId, $user, $invitation): FormResponse {
+        return DB::transaction(function () use ($form, $answers, $email, $identifier, $userId, $user, $invitation, $guestRecord): FormResponse {
             if ($invitation instanceof FormInvitation) {
                 $invitation = FormInvitation::query()
                     ->whereKey($invitation->getKey())
@@ -100,7 +106,7 @@ final class FormResponseService
             ]);
 
             $response->update(['latest_revision' => $revision]);
-            $this->createLinks($form, $response, $user, $email, $identifier, $invitation);
+            $this->createLinks($form, $response, $user, $email, $identifier, $invitation, $guestRecord);
             $this->audit->record($form, 'response_submitted', $response, ['revision' => $revision]);
 
             if (data_get($form->settings, 'mapping_mode') === 'auto_fill_empty') {
@@ -133,6 +139,14 @@ final class FormResponseService
             return $query->where('respondent_user_id', $userId)->latest()->first();
         }
 
+        if ($email !== null && $identifier !== null) {
+            return $query
+                ->where('respondent_email_hash', hash('sha256', $email))
+                ->where('respondent_identifier_hash', hash('sha256', $identifier))
+                ->latest()
+                ->first();
+        }
+
         if ($email !== null) {
             return $query->where('respondent_email_hash', hash('sha256', $email))->latest()->first();
         }
@@ -144,7 +158,7 @@ final class FormResponseService
         return null;
     }
 
-    private function createLinks(Form $form, FormResponse $response, ?object $user, ?string $email, ?string $identifier, ?FormInvitation $invitation = null): void
+    private function createLinks(Form $form, FormResponse $response, ?object $user, ?string $email, ?string $identifier, ?FormInvitation $invitation = null, ?object $guestRecord = null): void
     {
         $modelKeys = $form->fields
             ->map(fn ($field): ?string => is_array($field->mapping) ? ($field->mapping['model'] ?? null) : null)
@@ -155,13 +169,15 @@ final class FormResponseService
         foreach ($modelKeys as $modelKey) {
             $record = $invitation instanceof FormInvitation
                 ? $this->invitationTargets->resolve($invitation)
+                : ($guestRecord !== null && $modelKey === 'student'
+                ? $guestRecord
                 : ($user !== null
                 ? $this->models->resolveForUser($modelKey, $user)
                 : (($identifier !== null && $form->identity_type !== null)
                     ? $this->models->resolveByIdentifier($modelKey, $form->identity_type, $identifier)
                     : ($email !== null && $form->identity_type !== null
                         ? $this->models->resolveByIdentifier($modelKey, $form->identity_type, $email)
-                        : null)));
+                        : null))));
 
             FormResponseLink::query()->updateOrCreate(
                 ['form_response_id' => $response->getKey(), 'model_key' => $modelKey],

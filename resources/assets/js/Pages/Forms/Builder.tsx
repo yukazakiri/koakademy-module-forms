@@ -285,7 +285,7 @@ export default function FormsBuilder({
                   >
                     <option value="authenticated">Authenticated users</option>
                     <option value="guest_identifier">
-                      Guests with email or ID
+                      Guests with verified email or ID
                     </option>
                     <option value="anonymous">Anyone anonymously</option>
                     <option value="invitation">Personal email invitations</option>
@@ -293,7 +293,7 @@ export default function FormsBuilder({
                 </div>
                 {formState.data.access_mode === "guest_identifier" && (
                   <div className="space-y-2">
-                    <Label htmlFor="identity-type">Guest identifier</Label>
+                    <Label htmlFor="identity-type">Guest verification</Label>
                     <select
                       id="identity-type"
                       className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
@@ -303,8 +303,9 @@ export default function FormsBuilder({
                       }
                     >
                       <option value="email">Email address</option>
-                      <option value="student_id">Student ID</option>
+                      <option value="student_id">Student ID + registered email</option>
                     </select>
+                    {formState.data.identity_type === "student_id" && <p className="text-muted-foreground text-xs">Guests must verify both values before mapped student fields are prefilled.</p>}
                   </div>
                 )}
                 {formState.data.access_mode === "invitation" && (

@@ -3,9 +3,10 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import publicForms from "@/routes/forms";
+import axios from "axios";
 import { Head, useForm } from "@inertiajs/react";
 import { Check, ChevronRight, FileUp, LockKeyhole, Send } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface FormField {
   key: string;
@@ -74,6 +75,11 @@ export default function PublicFormShow({
     respondent_identifier: "",
     answers: {},
   });
+  const requiresStudentVerification = form.access_mode === "guest_identifier" && form.identity_type === "student_id" && !preview;
+  const [identityVerified, setIdentityVerified] = useState(!requiresStudentVerification);
+  const [identityLoading, setIdentityLoading] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const formLocked = requiresStudentVerification && !identityVerified;
   const visibleFields = useMemo(
     () => form.fields.filter((field) => visible(field, formState.data.answers)),
     [form.fields, formState.data.answers],
@@ -98,9 +104,46 @@ export default function PublicFormShow({
     formState.setData("answers", { ...formState.data.answers, [key]: value });
   }
 
+  function setIdentity(key: "respondent_identifier" | "respondent_email", value: string): void {
+    formState.setData(key, value);
+    setIdentityError(null);
+
+    if (identityVerified) {
+      setIdentityVerified(false);
+      formState.setData("answers", {});
+    }
+  }
+
+  async function verifyStudent(): Promise<void> {
+    setIdentityError(null);
+    setIdentityLoading(true);
+
+    try {
+      const response = await axios.post<{ matched: boolean; answers: Record<string, unknown> }>(
+        publicForms.identify.url(form.slug),
+        {
+          respondent_identifier: formState.data.respondent_identifier,
+          respondent_email: formState.data.respondent_email,
+        },
+      );
+
+      formState.setData("answers", response.data.answers ?? {});
+      setIdentityVerified(response.data.matched === true);
+    } catch (error) {
+      setIdentityVerified(false);
+      formState.setData("answers", {});
+      const responseErrors = axios.isAxiosError<{ errors?: Record<string, string[]> }>(error)
+        ? error.response?.data?.errors
+        : undefined;
+      setIdentityError(responseErrors?.respondent_identifier?.[0] ?? "We could not verify those details. Please check your Student ID and registered email.");
+    } finally {
+      setIdentityLoading(false);
+    }
+  }
+
   function submit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    if (preview) return;
+    if (preview || formLocked) return;
 
     if (invitation_token) {
       formState.post(
@@ -164,25 +207,39 @@ export default function PublicFormShow({
           <form onSubmit={submit} className="flex flex-col gap-5">
             {form.access_mode === "guest_identifier" && (
               <section className="border-border/70 bg-card rounded-xl border p-5 shadow-sm">
-                <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="respondent-identity">
-                  {form.identity_type === "student_id" ? "Student ID" : "Email address"}
-                  <Input
-                    id="respondent-identity"
-                    type={form.identity_type === "student_id" ? "text" : "email"}
-                    value={form.identity_type === "student_id" ? formState.data.respondent_identifier : formState.data.respondent_email}
-                    onChange={(event) =>
-                      formState.setData(
-                        form.identity_type === "student_id" ? "respondent_identifier" : "respondent_email",
-                        event.target.value,
-                      )
-                    }
-                    required
-                  />
-                </label>
+                {form.identity_type === "student_id" ? (
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <p className="text-sm font-semibold">Verify your student record</p>
+                      <p className="text-muted-foreground mt-1 text-xs leading-5">Enter your Student ID and the email address registered with the school. Your approved form fields will be prefilled after verification.</p>
+                    </div>
+                    <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="respondent-student-id">
+                      Student ID
+                      <Input id="respondent-student-id" value={formState.data.respondent_identifier} onChange={(event) => setIdentity("respondent_identifier", event.target.value)} required />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="respondent-email">
+                      Registered email
+                      <Input id="respondent-email" type="email" value={formState.data.respondent_email} onChange={(event) => setIdentity("respondent_email", event.target.value)} required />
+                    </label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button type="button" variant="secondary" onClick={verifyStudent} disabled={identityLoading || !formState.data.respondent_identifier || !formState.data.respondent_email}>
+                        {identityLoading ? "Verifying…" : identityVerified ? "Record verified" : "Find my record"}
+                      </Button>
+                      {identityVerified && <span className="text-xs text-emerald-600">Student record verified. You can now review the prefilled fields.</span>}
+                    </div>
+                    {identityError && <p className="text-destructive text-xs" role="alert">{identityError}</p>}
+                  </div>
+                ) : (
+                  <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="respondent-identity">
+                    Email address
+                    <Input id="respondent-identity" type="email" value={formState.data.respondent_email} onChange={(event) => formState.setData("respondent_email", event.target.value)} required />
+                  </label>
+                )}
               </section>
             )}
 
-            {sections.map(([section, fields]) => (
+            <fieldset disabled={formLocked} className="contents">
+              {sections.map(([section, fields]) => (
               <section key={section} className="flex flex-col gap-4">
                 <div className="px-1">
                   <p className="text-primary text-xs font-semibold tracking-[0.12em] uppercase">Section</p>
@@ -257,7 +314,8 @@ export default function PublicFormShow({
                   );
                 })}
               </section>
-            ))}
+              ))}
+            </fieldset>
 
             {formState.errors.form && <p className="text-destructive text-sm" role="alert">{formState.errors.form}</p>}
             <div className="border-border/70 bg-card flex flex-col gap-4 rounded-xl border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -265,7 +323,7 @@ export default function PublicFormShow({
                 <Check className="mr-1 inline size-3.5" />
                 {preview ? "Preview only. Responses cannot be submitted here." : "Responses are encrypted and protected."}
               </p>
-              <Button type="submit" size="lg" disabled={formState.processing || preview}>
+              <Button type="submit" size="lg" disabled={formState.processing || preview || formLocked}>
                 {preview ? "Preview only" : formState.processing ? "Submitting…" : "Submit response"}
                 {!preview && (formState.processing ? <ChevronRight className="size-4" /> : <Send className="size-4" />)}
               </Button>
