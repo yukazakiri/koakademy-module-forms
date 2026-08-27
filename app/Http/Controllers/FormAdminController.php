@@ -92,6 +92,23 @@ final class FormAdminController
         ]);
     }
 
+    public function preview(Request $request, Form $form): InertiaResponse
+    {
+        $this->authorize($request, 'view');
+        $this->ensureTenant($form);
+        abort_unless($form->isOpen(), 404);
+
+        return Inertia::render('Forms/PublicShow', [
+            'form' => $this->definitions->publicPayload($form->load('fields')),
+            'authenticated' => true,
+            'user' => [
+                'name' => data_get($request->user(), 'name'),
+                'email' => data_get($request->user(), 'email'),
+            ],
+            'preview' => true,
+        ]);
+    }
+
     public function update(UpdateFormRequest $request, Form $form): RedirectResponse
     {
         $this->ensureTenant($form);

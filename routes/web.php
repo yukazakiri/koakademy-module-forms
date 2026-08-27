@@ -22,6 +22,7 @@ Route::prefix((string) config('forms.admin_prefix', 'administrators/forms'))->na
     Route::post('/{form}/invitations/send', [FormInvitationController::class, 'send'])->name('invitations.send');
     Route::post('/', [FormAdminController::class, 'store'])->name('store');
     Route::get('/{form}/edit', [FormAdminController::class, 'edit'])->name('edit');
+    Route::get('/{form}/preview', [FormAdminController::class, 'preview'])->name('preview');
     Route::put('/{form}', [FormAdminController::class, 'update'])->name('update');
     Route::post('/{form}/publish', [FormAdminController::class, 'publish'])->name('publish');
     Route::post('/{form}/close', [FormAdminController::class, 'close'])->name('close');

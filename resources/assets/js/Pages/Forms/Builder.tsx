@@ -649,9 +649,9 @@ export default function FormsBuilder({
                 <Button
                 type="button"
                 variant="outline"
-                onClick={() => window.open(`/forms/${data.slug}`, "_blank")}
+                onClick={() => window.open(formsRoutes.preview.url(form.id), "_blank")}
               >
-                <Eye className="size-4" /> Preview public form
+                <Eye className="size-4" /> Preview form
               </Button>
             )}
             {isEditing && form?.id && (

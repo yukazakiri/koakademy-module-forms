@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Modules\Forms\Contracts\FormsInvitationTargetProvider;
@@ -9,6 +10,7 @@ use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Enums\FormAccessMode;
 use Modules\Forms\Enums\FormResponseStatus;
 use Modules\Forms\Enums\FormStatus;
+use Modules\Forms\Http\Controllers\FormAdminController;
 use Modules\Forms\Jobs\SendFormInvitation;
 use Modules\Forms\Mail\FormInvitationMail;
 use Modules\Forms\Models\Form;
@@ -23,6 +25,38 @@ use Modules\Forms\Services\FormMappingService;
 use Modules\Forms\Services\FormResponseService;
 use Modules\Forms\Services\FormTemplateService;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+it('renders invitation forms through the authenticated admin preview route', function (): void {
+    $form = Form::factory()->create([
+        'status' => FormStatus::Published,
+        'access_mode' => FormAccessMode::Invitation,
+    ]);
+
+    $form->fields()->create([
+        'field_key' => 'first_name',
+        'label' => 'First name',
+        'type' => 'text',
+        'required' => true,
+        'position' => 1,
+    ]);
+
+    $request = Request::create(route('administrators.forms.preview', ['form' => $form]), 'GET');
+    $request->headers->set('X-Inertia', 'true');
+    $request->setUserResolver(fn (): object => (object) [
+        'id' => 7,
+        'name' => 'Administrator',
+        'email' => 'admin@example.test',
+        'is_super_admin' => true,
+    ]);
+
+    $httpResponse = app(FormAdminController::class)->preview($request, $form)->toResponse($request);
+    $payload = json_decode($httpResponse->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($httpResponse->getStatusCode())->toBe(200)
+        ->and($payload['component'])->toBe('Forms/PublicShow')
+        ->and($payload['props']['form']['access_mode'])->toBe('invitation')
+        ->and($payload['props']['preview'])->toBeTrue();
+});
 
 it('generates the built-in student template from approved host fields', function (): void {
     $registry = Mockery::mock(FormsModelRegistry::class);

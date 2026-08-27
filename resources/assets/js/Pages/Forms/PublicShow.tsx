@@ -39,6 +39,7 @@ interface Props {
   form: FormDefinition;
   authenticated: boolean;
   user: { name?: string; email?: string } | null;
+  preview?: boolean;
   invitation_token?: string;
   invitation?: { expires_at: string | null; student_name: string | null };
 }
@@ -60,6 +61,7 @@ function filled(value: unknown): boolean {
 export default function PublicFormShow({
   form,
   user,
+  preview = false,
   invitation_token,
   invitation,
 }: Props) {
@@ -98,6 +100,8 @@ export default function PublicFormShow({
 
   function submit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    if (preview) return;
+
     if (invitation_token) {
       formState.post(
         publicForms.invitation.submit.url({
@@ -126,7 +130,7 @@ export default function PublicFormShow({
                 <LockKeyhole className="size-5" aria-hidden="true" />
               </div>
               <p className="text-muted-foreground mt-6 text-xs font-semibold tracking-[0.12em] uppercase">
-                {invitation ? "Personal profile update" : "Secure response"}
+                {preview ? "Administrator preview" : invitation ? "Personal profile update" : "Secure response"}
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">
                 {form.title}
@@ -257,10 +261,13 @@ export default function PublicFormShow({
 
             {formState.errors.form && <p className="text-destructive text-sm" role="alert">{formState.errors.form}</p>}
             <div className="border-border/70 bg-card flex flex-col gap-4 rounded-xl border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-muted-foreground text-xs"><Check className="mr-1 inline size-3.5" /> Responses are encrypted and protected.</p>
-              <Button type="submit" size="lg" disabled={formState.processing}>
-                {formState.processing ? "Submitting…" : "Submit response"}
-                {formState.processing ? <ChevronRight className="size-4" /> : <Send className="size-4" />}
+              <p className="text-muted-foreground text-xs">
+                <Check className="mr-1 inline size-3.5" />
+                {preview ? "Preview only. Responses cannot be submitted here." : "Responses are encrypted and protected."}
+              </p>
+              <Button type="submit" size="lg" disabled={formState.processing || preview}>
+                {preview ? "Preview only" : formState.processing ? "Submitting…" : "Submit response"}
+                {!preview && (formState.processing ? <ChevronRight className="size-4" /> : <Send className="size-4" />)}
               </Button>
             </div>
           </form>
