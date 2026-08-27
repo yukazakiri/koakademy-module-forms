@@ -1,36 +1,207 @@
 # KoAkademy Online Forms Module
 
-Reusable online forms for surveys, evaluations, student information updates, and other school workflows.
+Reusable online forms for surveys, evaluations, student information updates,
+and other school workflows.
+
+## Requirements
+
+- KoAkademy 1.22 or newer
+- PHP 8.5
+- Laravel 13, Filament 5, and nwidart/laravel-modules 13
+- A host image with Composer-installed vendor module asset support
+
+The package is distributed through the public [KoAkademy Composer
+repository](https://yukazakiri.github.io/koakademy-modules). The Marketplace
+catalog does not install PHP code into a running container; Composer and the
+application image do that.
 
 ## Installation
 
-Install it in a KoAkademy application with Composer, then rebuild the application image:
+Run the following commands from the host application's repository root:
 
-```bash
-composer require koakademy/forms
-php artisan migrate --force
-php artisan optimize:clear
-```
+    composer config repositories.koakademy composer https://yukazakiri.github.io/koakademy-modules
+    composer require koakademy/forms:^1.0
+    php artisan migrate --force
+    php artisan optimize:clear
 
-Enable the module from **Administrators → Marketplace**. The module is intentionally disabled for fresh installations until an administrator enables it. Existing installations keep their current module status during upgrades.
+If the host already has the koakademy Composer repository configured, only the
+composer require command is needed. Commit composer.json and composer.lock.
+Installing Composer files in one running replica is not a complete deployment.
 
-The module uses the host application's Vite/Inertia build. A production deployment must run the normal KoAkademy frontend build after Composer installs the package.
+The host's normal frontend build must include Composer module pages:
 
-## Features
+    composer install --no-dev --prefer-dist --optimize-autoloader
+    npm ci
+    npm run build
 
-- Authenticated, guest email/student ID, or anonymous responses.
-- Text, long text, email, number, date, select, radio, checkbox, yes/no, file, and rating fields.
-- Response revision history, duplicate-response policy, close dates, CSV export, and protected uploads.
-- Review-before-apply workflow for model mappings.
-- Sensitive answer and mapping metadata captured in an audit trail.
+Use the build and release hooks supplied by the host platform. Run the
+migration once, clear the application cache, and restart or roll every
+application worker.
 
-## KoAkademy model mappings
+### Docker Compose
 
-The KoAkademy adapter exposes an allowlisted Student profile catalog. A form administrator can map answers to approved student paths such as origins, equity flags, contact details, parent/guardian information, and education information.
+Build the host application image after the package has been added to
+composer.json and composer.lock. Run the migration as a one-off task for the
+application service, then recreate the service with the new image:
 
-Mappings are never accepted directly from arbitrary request paths. Answers are stored first, matched to the authenticated user or configured guest identity, and only update a record after an administrator explicitly applies the response. By default, applying a response fills blank fields only; overwriting existing values is a separate action.
+    docker compose build <app-service>
+    docker compose run --rm <app-service> php artisan migrate --force
+    docker compose up -d <app-service>
 
-Other host applications can integrate their own records by binding `Modules\\Forms\\Contracts\\FormsModelRegistry` and `Modules\\Forms\\Contracts\\FormsTenantResolver` in a service provider.
+Replace app-service with the service name in the host application's Compose
+file.
+
+### Docker Swarm or Dokploy
+
+Build and push the host application image, then redeploy the Swarm service with
+that immutable tag or digest. Run php artisan migrate --force through the
+release hook or a one-off container before or during the rollout. Confirm that
+all replicas use the same image and that the persistent module status file is
+available to every worker.
+
+Dokploy is a deployment interface around this same image workflow: commit the
+lockfile, trigger a new image build, run the release migration, and redeploy.
+A Marketplace refresh by itself does not rebuild the image.
+
+### Kubernetes or another platform
+
+Add the package to the host image build, run the migration as a release Job,
+and roll the application Deployment. The exact service, Job, and secret names
+are platform-specific; the required order is Composer install, frontend
+build, migration, cache clear, and rollout.
+
+### Enable the module
+
+1. Sign in as a super administrator.
+2. Open **Administrators → System → Marketplace**, or visit
+   /administrators/module-marketplace.
+3. Enable **Forms**.
+4. Restart/redeploy the application so every worker reads the new module
+   status.
+
+Fresh installations initialize optional modules disabled. Upgrades preserve
+the existing modules_statuses.json choices, so an already-enabled Forms
+module stays enabled.
+
+## Where Forms appears
+
+Forms is a custom Inertia administrator workspace, not a Filament resource.
+After the package is installed, the module is enabled, and the host frontend
+has been rebuilt, it appears as **Online Forms** in the administrator sidebar
+under **Students**.
+
+The direct administrator URL is:
+
+    /administrators/forms
+
+If the sidebar entry is not visible, open that URL directly and verify that
+the current host image includes vendor module page discovery. Also check that
+the signed-in account is a super administrator or has the Forms view
+permission. A hard refresh may be needed after a new frontend image is
+deployed.
+
+## Create a form
+
+1. Open Online Forms and choose **Create form**.
+2. Set a title, optional public slug, description, closing date, and
+   confirmation message.
+3. Choose who can respond:
+   - **Authenticated users** links the response to the signed-in account.
+   - **Guests with email or ID** asks for the configured email address or
+     Student ID and can resolve the matching student.
+   - **Anyone anonymously** records no identity.
+4. Add questions. Supported types are text, long text, email, number, date,
+   select, radio, checkbox, yes/no, file, and rating.
+5. Give each question a stable key such as guardian_name or origin. Mark
+   required and sensitive questions deliberately.
+6. Save the draft, review the publishing checklist, and choose **Publish**.
+
+The public form is available at:
+
+    /forms/<public-slug>
+
+Share the full HTTPS URL from the deployed application, not only the slug.
+Closed forms cannot accept new responses.
+
+## Link answers to KoAkademy records
+
+When the KoAkademy adapter is available, the builder shows **Student** as an
+allowed model and presents approved writable fields. To create a student
+information update form:
+
+1. Add questions such as Origin, Special Equity, Guardian Name, Parent Name,
+   and Contact Number.
+2. Mark personal or sensitive questions as sensitive.
+3. In each question's **Record mapping**, choose **Student**.
+4. Choose the matching approved field path shown by the builder. Do not type
+   arbitrary model paths.
+5. Publish the form and share it with the intended respondents.
+
+Authenticated responses are linked to the user's student record. Guest
+responses use the configured email or Student ID to resolve a student.
+Anonymous responses remain unlinked unless a host integration supplies an
+approved identity workflow. Answers are stored first; they never update a
+student record merely because a mapping was configured.
+
+## Review and apply responses
+
+1. Return to Online Forms and select **View responses**.
+2. Inspect the respondent, revisions, answers, sensitive markers, and record
+   link status.
+3. Choose **Apply blank fields only** to avoid overwriting existing values.
+4. Use **Apply and overwrite** only when the submitted answer has been
+   verified and the operator has permission to overwrite data.
+5. Use **Export CSV** when a controlled offline review is required, and
+   protect the exported file like the original records.
+
+Every mapping application and export is audited. Configure retention,
+permissions, HTTPS, backups, and private upload storage according to the
+institution's privacy policy.
+
+## Host application integrations
+
+Other host applications can bind these contracts in a service provider:
+
+    Modules\Forms\Contracts\FormsModelRegistry
+    Modules\Forms\Contracts\FormsTenantResolver
+
+The model registry must expose an allowlisted model and writable field catalog,
+resolve records by authenticated user or approved identifier, and implement
+read/write persistence. The tenant resolver must return the current tenant
+key. Do not accept model names or write paths directly from public requests.
+
+## Troubleshooting
+
+### Marketplace says the core edge version does not satisfy >=1.22.0
+
+The Forms manifest intentionally requires KoAkademy 1.22 or newer. Deploy a
+current 1.22 edge image containing edge-version compatibility handling, or use
+a stable KoAkademy 1.22 release. Do not weaken the Forms requirement to make
+an older core appear compatible.
+
+### Forms is installed but no sidebar item appears
+
+Confirm all of the following:
+
+    composer show koakademy/forms
+    php artisan route:list | grep administrators.forms
+
+- Forms is enabled in Marketplace.
+- The status file contains Forms set to true.
+- The image was rebuilt after composer.json and composer.lock changed.
+- npm run build ran after the package was installed.
+- The host core includes vendor module pages in its Vite and Inertia loaders.
+- The current user can view Forms.
+
+The direct URL remains /administrators/forms. If that URL returns a missing
+route, the provider was not loaded; inspect the image's Composer autoload and
+Laravel package discovery output.
+
+## Upgrading
+
+After releasing a newer module tag, update the package in the host repository,
+rebuild the image, run migrations, clear caches, and redeploy. Refreshing
+Marketplace alone only refreshes catalog metadata.
 
 ## License
 
