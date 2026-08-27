@@ -8,7 +8,7 @@
     "license": "AGPL-3.0-or-later",
     "requires": {
         "core": ">=1.22.0",
-        "php": ">=8.5",
+        "php": ">=8.5 <8.6",
         "modules": {}
     },
     "compatibility": {
