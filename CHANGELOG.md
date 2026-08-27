@@ -2,6 +2,12 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.1.1 - 2026-08-27
+
+- Fixed `ArgumentCountError` when resolving the student field suggestion and
+  invitation target providers by injecting their `FormsModelRegistry` and
+  `FormsTenantResolver` dependencies from the container.
+
 ## 1.1.0 - 2026-08-27
 
 - Added built-in and tenant-scoped reusable form templates.

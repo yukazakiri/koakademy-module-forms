@@ -8,6 +8,7 @@ use App\Models\Student;
 use App\Services\TenantContext;
 use App\Support\RegistrarStudentProfileWorkbook;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Modules\Forms\Contracts\FormsFieldSuggestionProvider;
@@ -49,14 +50,20 @@ final class FormsServiceProvider extends ServiceProvider
                 ? new KoAkademyFormsTenantResolver
                 : new NullFormsTenantResolver;
         });
-        $this->app->singleton(FormsInvitationTargetProvider::class, function (): FormsInvitationTargetProvider {
+        $this->app->singleton(FormsInvitationTargetProvider::class, function (Application $app): FormsInvitationTargetProvider {
             return class_exists(Student::class) && class_exists(RegistrarStudentProfileWorkbook::class)
-                ? new KoAkademyFormsInvitationTargetProvider
+                ? new KoAkademyFormsInvitationTargetProvider(
+                    $app->make(FormsModelRegistry::class),
+                    $app->make(FormsTenantResolver::class),
+                )
                 : new NullFormsInvitationTargetProvider;
         });
-        $this->app->singleton(FormsFieldSuggestionProvider::class, function (): FormsFieldSuggestionProvider {
+        $this->app->singleton(FormsFieldSuggestionProvider::class, function (Application $app): FormsFieldSuggestionProvider {
             return class_exists(Student::class) && class_exists(RegistrarStudentProfileWorkbook::class)
-                ? new KoAkademyFormsFieldSuggestionProvider
+                ? new KoAkademyFormsFieldSuggestionProvider(
+                    $app->make(FormsModelRegistry::class),
+                    $app->make(FormsTenantResolver::class),
+                )
                 : new NullFormsFieldSuggestionProvider;
         });
     }
