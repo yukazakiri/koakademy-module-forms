@@ -18,6 +18,7 @@ use Modules\Forms\Models\FormResponse;
 use Modules\Forms\Models\FormTemplate;
 use Modules\Forms\Services\FormAnswerService;
 use Modules\Forms\Services\FormInvitationService;
+use Modules\Forms\Services\FormLifecycleService;
 use Modules\Forms\Services\FormMappingService;
 use Modules\Forms\Services\FormResponseService;
 use Modules\Forms\Services\FormTemplateService;
@@ -44,6 +45,43 @@ it('generates the built-in student template from approved host fields', function
         ->and($definition['settings']['mapping_mode'])->toBe('auto_fill_empty')
         ->and($definition['fields'][0]['mapping'])->toBe(['model' => 'student', 'path' => 'details.birthplace'])
         ->and($definition['fields'][0]['presentation']['control'])->toBe('combobox');
+});
+
+it('caches approved mapping paths while creating a form', function (): void {
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->once()->with('student')->andReturn([
+        ['write_paths' => ['details.first_name', 'details.last_name']],
+    ]);
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $form = app(FormLifecycleService::class)->create([
+        'title' => 'Student profile completion',
+        'slug' => 'student-profile-completion-test',
+        'description' => null,
+        'access_mode' => FormAccessMode::Invitation->value,
+        'identity_type' => null,
+        'settings' => [],
+        'fields' => [
+            [
+                'field_key' => 'first_name',
+                'label' => 'First name',
+                'type' => 'text',
+                'mapping' => ['model' => 'student', 'path' => 'details.first_name'],
+            ],
+            [
+                'field_key' => 'last_name',
+                'label' => 'Last name',
+                'type' => 'text',
+                'mapping' => ['model' => 'student', 'path' => 'details.last_name'],
+            ],
+        ],
+    ], (object) ['id' => 7]);
+
+    expect($form->fields)->toHaveCount(2)
+        ->and($form->fields->pluck('mapping')->all())->toBe([
+            ['model' => 'student', 'path' => 'details.first_name'],
+            ['model' => 'student', 'path' => 'details.last_name'],
+        ]);
 });
 
 it('clones a custom template without sharing its database identity', function (): void {

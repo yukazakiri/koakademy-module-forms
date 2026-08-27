@@ -86,6 +86,7 @@ final class FormLifecycleService
     private function replaceFields(Form $form, array $fields): void
     {
         $form->fields()->delete();
+        $approvedPathsByModel = [];
 
         foreach (array_values($fields) as $position => $field) {
             $form->fields()->create([
@@ -101,15 +102,17 @@ final class FormLifecycleService
                 'presentation' => $field['presentation'] ?? [],
                 'behavior' => $field['behavior'] ?? [],
                 'visibility' => $field['visibility'] ?? null,
-                'mapping' => $this->approvedMapping($field['mapping'] ?? null),
+                'mapping' => $this->approvedMapping($field['mapping'] ?? null, $approvedPathsByModel),
                 'is_sensitive' => (bool) ($field['is_sensitive'] ?? false),
             ]);
         }
     }
 
     /**
-     *  @return array{model: string, path: string}|null */
-    private function approvedMapping(mixed $mapping): ?array
+     * @param  array<string, list<string>>  $approvedPathsByModel
+     * @return array{model: string, path: string}|null
+     */
+    private function approvedMapping(mixed $mapping, array &$approvedPathsByModel): ?array
     {
         if (! is_array($mapping)) {
             return null;
@@ -121,7 +124,7 @@ final class FormLifecycleService
             return null;
         }
 
-        $approvedPaths = collect($this->models->fields($model))
+        $approvedPaths = $approvedPathsByModel[$model] ??= collect($this->models->fields($model))
             ->flatMap(fn (array $field): array => $field['write_paths'] ?? [])
             ->filter(fn (mixed $approvedPath): bool => is_string($approvedPath))
             ->values()
