@@ -296,16 +296,19 @@ final class FormTemplateService
     private function profileField(array $field): array
     {
         $key = (string) ($field['key'] ?? Str::snake((string) ($field['label'] ?? 'field')));
-        $type = match ($field['type'] ?? 'string') {
-            'choice' => 'select',
-            'boolean' => 'yes_no',
-            'email' => 'email',
-            'number' => 'number',
-            'year' => 'year',
-            default => in_array($key, ['phone', 'father_contact', 'mother_contact', 'guardian_contact', 'emergency_contact_phone'], true)
-                ? 'phone'
-                : 'text',
-        };
+        $type = str_contains($key, 'address')
+            ? 'textarea'
+            : match ($field['type'] ?? 'string') {
+                'choice' => 'select',
+                'boolean' => 'yes_no',
+                'date' => 'date',
+                'email' => 'email',
+                'number' => 'number',
+                'year' => 'year',
+                default => in_array($key, ['phone', 'father_contact', 'mother_contact', 'guardian_contact', 'emergency_contact_phone'], true)
+                    ? 'phone'
+                    : 'text',
+            };
         $options = $field['options'] ?? [];
         $recordSuggestions = in_array($key, [
             'birthplace',
@@ -364,6 +367,10 @@ final class FormTemplateService
         if ($type === 'year') {
             $fieldData['validation']['min'] = 1900;
             $fieldData['validation']['max'] = now()->year;
+        }
+
+        if ($key === 'birth_date') {
+            $fieldData['validation']['before_or_equal'] = 'today';
         }
 
         return $fieldData;

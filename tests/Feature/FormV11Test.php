@@ -92,6 +92,33 @@ it('generates the built-in student template from approved host fields', function
         ->and($definition['fields'][0]['presentation']['control'])->toBe('combobox');
 });
 
+it('uses smart field types for built-in student profile fields', function (): void {
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->with('student')->andReturn([
+        [
+            'key' => 'birth_date',
+            'label' => 'Birth Date',
+            'type' => 'date',
+            'group' => 'Identity',
+            'write_paths' => ['student.birth_date'],
+        ],
+        [
+            'key' => 'current_address',
+            'label' => 'Current Address',
+            'type' => 'string',
+            'group' => 'Address',
+            'write_paths' => ['student.address'],
+        ],
+    ]);
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $fields = app(FormTemplateService::class)->definition('student_profile_completion')['fields'];
+
+    expect($fields[0]['type'])->toBe('date')
+        ->and($fields[0]['validation'])->toBe(['before_or_equal' => 'today'])
+        ->and($fields[1]['type'])->toBe('textarea');
+});
+
 it('hydrates built-in profile help text for the editor when old forms have empty values', function (): void {
     $form = Form::factory()->create([
         'settings' => ['template_key' => 'student_profile_completion'],

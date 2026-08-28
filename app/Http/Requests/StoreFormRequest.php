@@ -46,6 +46,7 @@ class StoreFormRequest extends FormRequest
             'fields.*.validation' => ['nullable', 'array'],
             'fields.*.validation.min' => ['nullable', 'numeric'],
             'fields.*.validation.max' => ['nullable', 'numeric'],
+            'fields.*.validation.before_or_equal' => ['nullable', Rule::in(['today'])],
             'fields.*.validation.mimes' => ['nullable', 'array', 'max:20'],
             'fields.*.validation.mimes.*' => ['string', 'max:20'],
             'fields.*.presentation' => ['nullable', 'array'],

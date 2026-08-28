@@ -64,6 +64,7 @@ final class FormDefinitionService
             'description' => $field->description,
             'required' => $field->required,
             'options' => $options,
+            'validation' => $field->validation ?? [],
             'visibility' => $field->visibility,
             'section' => $field->section,
             'presentation' => $field->presentation ?? [],
@@ -142,6 +143,10 @@ final class FormDefinitionService
 
         if (isset($validation['max']) && is_numeric($validation['max'])) {
             $rules[] = 'max:'.$validation['max'];
+        }
+
+        if ($field->type === 'date' && ($validation['before_or_equal'] ?? null) === 'today') {
+            $rules[] = 'before_or_equal:today';
         }
 
         return $rules;

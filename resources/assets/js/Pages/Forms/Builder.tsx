@@ -725,7 +725,7 @@ export default function FormsBuilder({
                           </Field>
                           <Field>
                             <Label htmlFor={`field-section-${index}`}>
-                              Section
+                              Page / section
                             </Label>
                             <Input
                               id={`field-section-${index}`}
@@ -735,10 +735,12 @@ export default function FormsBuilder({
                                   section: event.target.value,
                                 })
                               }
-                              placeholder="Personal details"
+                              placeholder="Profile details"
                             />
                             <FieldDescription>
-                              Group related questions under a shared heading.
+                              Each section becomes a separate student-facing
+                              page. Keep related questions together and order
+                              questions to control page order.
                             </FieldDescription>
                           </Field>
                           <Field>

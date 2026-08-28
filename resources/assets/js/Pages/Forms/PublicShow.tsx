@@ -26,6 +26,7 @@ interface FormField {
   description: string | null;
   required: boolean;
   options: Record<string, string>;
+  validation?: Record<string, string | number>;
   visibility: { field?: string; operator?: string; value?: string } | null;
   section?: string | null;
   presentation?: {
@@ -179,6 +180,8 @@ export default function PublicFormShow({
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identityFallbackAvailable, setIdentityFallbackAvailable] =
     useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageError, setPageError] = useState<string | null>(null);
   const formLocked =
     requiresStudentVerification && !identityVerified && !identityUnverified;
   const isStudentProfileForm =
@@ -195,6 +198,14 @@ export default function PublicFormShow({
     });
     return [...grouped.entries()];
   }, [visibleFields]);
+  const activePageIndex = Math.min(
+    currentPage,
+    Math.max(sections.length - 1, 0),
+  );
+  const activePage = sections[activePageIndex];
+  const activeSection = activePage?.[0] ?? "Questions";
+  const activeFields = activePage?.[1] ?? [];
+  const isLastPage = activePageIndex === sections.length - 1;
   const completion = visibleFields.length
     ? Math.round(
         (visibleFields.filter((field) =>
@@ -213,7 +224,35 @@ export default function PublicFormShow({
   );
 
   function setAnswer(key: string, value: unknown): void {
+    setPageError(null);
     formState.setData("answers", { ...formState.data.answers, [key]: value });
+  }
+
+  function goToNextPage(): void {
+    const missingField = activeFields.find(
+      (field) => field.required && !filled(formState.data.answers[field.key]),
+    );
+    if (missingField) {
+      setPageError(`Please answer “${missingField.label}” before continuing.`);
+      return;
+    }
+
+    const invalidBirthDate = activeFields.find((field) => {
+      const value = formState.data.answers[field.key];
+      return (
+        field.type === "date" &&
+        field.validation?.before_or_equal === "today" &&
+        typeof value === "string" &&
+        value > new Date().toISOString().slice(0, 10)
+      );
+    });
+    if (invalidBirthDate) {
+      setPageError(`“${invalidBirthDate.label}” cannot be in the future.`);
+      return;
+    }
+
+    setCurrentPage((page) => Math.min(page + 1, sections.length - 1));
+    setPageError(null);
   }
 
   function setIdentity(
@@ -410,6 +449,31 @@ export default function PublicFormShow({
               className="mt-3"
               aria-label={`Form completion ${completion}%`}
             />
+            {sections.length > 1 && (
+              <div
+                className="mt-4 flex items-center gap-2"
+                aria-label="Form pages"
+              >
+                {sections.map(([section], index) => (
+                  <div
+                    key={section}
+                    className="flex min-w-0 flex-1 items-center gap-2"
+                    aria-current={
+                      index === activePageIndex ? "step" : undefined
+                    }
+                  >
+                    <span
+                      className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${index === activePageIndex ? "bg-primary text-primary-foreground" : index < activePageIndex ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="text-muted-foreground hidden truncate text-xs sm:block">
+                      {section}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <form onSubmit={submit} className="flex flex-col gap-5">
@@ -562,261 +626,276 @@ export default function PublicFormShow({
             )}
 
             <fieldset disabled={formLocked} className="contents">
-              {sections.map(([section, fields], sectionIndex) => (
-                <section key={section} className="flex flex-col gap-4">
-                  <div className="flex items-start gap-3 px-1">
-                    <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
-                      {sectionIndex + 1}
-                    </span>
-                    <div>
-                      <p className="text-primary text-xs font-semibold tracking-[0.12em] uppercase">
-                        Section {sectionIndex + 1}
-                      </p>
-                      <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em]">
-                        {section}
-                      </h2>
-                      {isStudentProfileForm &&
-                        profileSectionDescriptions[section] && (
-                          <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-6">
-                            {profileSectionDescriptions[section]}
-                          </p>
-                        )}
-                    </div>
+              <section key={activeSection} className="flex flex-col gap-4">
+                <div className="flex items-start gap-3 px-1">
+                  <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
+                    {activePageIndex + 1}
+                  </span>
+                  <div>
+                    <p className="text-primary text-xs font-semibold tracking-[0.12em] uppercase">
+                      Page {activePageIndex + 1} of {sections.length}
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em]">
+                      {activeSection}
+                    </h2>
+                    {isStudentProfileForm &&
+                      profileSectionDescriptions[activeSection] && (
+                        <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-6">
+                          {profileSectionDescriptions[activeSection]}
+                        </p>
+                      )}
                   </div>
-                  {fields.map((field, index) => {
-                    const value = formState.data.answers[field.key];
-                    const control = field.presentation?.control;
-                    const listId = `suggestions-${field.key}`;
-                    const description =
-                      field.description ??
-                      (isStudentProfileForm
-                        ? (profileFieldDescriptions[field.key] ??
-                          "Enter the information as it should appear in your school record.")
-                        : null);
-                    const placeholder = profilePlaceholder(field);
-                    const inputType =
-                      field.type === "number" || field.type === "year"
-                        ? "number"
-                        : field.type === "date"
-                          ? "date"
-                          : field.type === "email"
-                            ? "email"
-                            : field.type === "phone"
-                              ? "tel"
-                              : "text";
-                    const isChoice = ["select", "radio", "yes_no"].includes(
-                      field.type,
-                    );
-                    const choiceOptions: ComboboxOption[] = Object.entries(
-                      field.options ?? {},
-                    ).map(([optionValue, optionLabel]) => ({
-                      value: optionValue,
-                      label: optionLabel,
-                    }));
-                    return (
-                      <div
-                        key={field.key}
-                        className="border-border/70 bg-card rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6"
-                      >
-                        <div className="flex items-start gap-3">
-                          <span className="bg-muted text-muted-foreground mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-                            {fieldNumbers.get(field.key) ?? index + 1}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                              <label
-                                className="text-sm font-semibold"
-                                htmlFor={`answer-${field.key}`}
-                              >
-                                {field.label}
-                              </label>
-                              <Badge
-                                variant={
-                                  field.required ? "outline" : "secondary"
+                </div>
+                {activeFields.map((field, index) => {
+                  const value = formState.data.answers[field.key];
+                  const control = field.presentation?.control;
+                  const listId = `suggestions-${field.key}`;
+                  const description =
+                    field.description ??
+                    (isStudentProfileForm
+                      ? (profileFieldDescriptions[field.key] ??
+                        "Enter the information as it should appear in your school record.")
+                      : null);
+                  const placeholder = profilePlaceholder(field);
+                  const inputType =
+                    field.type === "number" || field.type === "year"
+                      ? "number"
+                      : field.type === "date"
+                        ? "date"
+                        : field.type === "email"
+                          ? "email"
+                          : field.type === "phone"
+                            ? "tel"
+                            : "text";
+                  const isChoice = ["select", "radio", "yes_no"].includes(
+                    field.type,
+                  );
+                  const choiceOptions: ComboboxOption[] = Object.entries(
+                    field.options ?? {},
+                  ).map(([optionValue, optionLabel]) => ({
+                    value: optionValue,
+                    label: optionLabel,
+                  }));
+                  return (
+                    <div
+                      key={field.key}
+                      className="border-border/70 bg-card rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="bg-muted text-muted-foreground mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                          {fieldNumbers.get(field.key) ?? index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <label
+                              className="text-sm font-semibold"
+                              htmlFor={`answer-${field.key}`}
+                            >
+                              {field.label}
+                            </label>
+                            <Badge
+                              variant={field.required ? "outline" : "secondary"}
+                            >
+                              {field.required ? "Required" : "Optional"}
+                            </Badge>
+                          </div>
+                          {description && (
+                            <p className="text-muted-foreground mt-2 text-xs leading-5">
+                              {description}
+                            </p>
+                          )}
+                          <div className="mt-4">
+                            {field.type === "textarea" ? (
+                              <Textarea
+                                id={`answer-${field.key}`}
+                                value={String(value ?? "")}
+                                onChange={(event) =>
+                                  setAnswer(field.key, event.target.value)
                                 }
-                              >
-                                {field.required ? "Required" : "Optional"}
-                              </Badge>
-                            </div>
-                            {description && (
-                              <p className="text-muted-foreground mt-2 text-xs leading-5">
-                                {description}
-                              </p>
-                            )}
-                            <div className="mt-4">
-                              {field.type === "textarea" ? (
-                                <Textarea
+                                placeholder={placeholder}
+                                required={field.required}
+                                rows={5}
+                              />
+                            ) : field.type === "file" ? (
+                              <label className="border-input bg-background flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-sm">
+                                <FileUp
+                                  className="text-muted-foreground size-5"
+                                  aria-hidden="true"
+                                />
+                                <span>
+                                  {value instanceof File
+                                    ? value.name
+                                    : "Choose a file"}
+                                </span>
+                                <Input
                                   id={`answer-${field.key}`}
+                                  className="sr-only"
+                                  type="file"
+                                  onChange={(event) =>
+                                    setAnswer(
+                                      field.key,
+                                      event.target.files?.[0] ?? null,
+                                    )
+                                  }
+                                  required={field.required}
+                                />
+                              </label>
+                            ) : isChoice && control === "combobox" ? (
+                              <Combobox
+                                options={choiceOptions}
+                                value={typeof value === "string" ? value : ""}
+                                onValueChange={(selectedValue) =>
+                                  setAnswer(field.key, selectedValue)
+                                }
+                                placeholder={placeholder ?? "Choose an option"}
+                                searchPlaceholder={`Search ${field.label.toLowerCase()}…`}
+                                emptyText="No matching options."
+                                required={field.required}
+                              />
+                            ) : isChoice &&
+                              (control === "radio_cards" ||
+                                field.type === "radio" ||
+                                field.type === "yes_no") ? (
+                              <div
+                                className="grid gap-2 sm:grid-cols-2"
+                                role="radiogroup"
+                                aria-label={field.label}
+                              >
+                                {Object.entries(field.options).map(
+                                  ([key, label]) => (
+                                    <label
+                                      key={key}
+                                      className={`border-border/70 hover:bg-muted/40 flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition ${value === key ? "border-primary bg-primary/5" : ""}`}
+                                    >
+                                      <input
+                                        className="accent-primary"
+                                        type="radio"
+                                        name={`answer-${field.key}`}
+                                        value={key}
+                                        checked={value === key}
+                                        onChange={() =>
+                                          setAnswer(field.key, key)
+                                        }
+                                        required={field.required}
+                                      />
+                                      {label}
+                                    </label>
+                                  ),
+                                )}
+                              </div>
+                            ) : isChoice ? (
+                              <select
+                                id={`answer-${field.key}`}
+                                className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+                                value={String(value ?? "")}
+                                onChange={(event) =>
+                                  setAnswer(field.key, event.target.value)
+                                }
+                                required={field.required}
+                              >
+                                <option value="">Choose an option</option>
+                                {Object.entries(field.options).map(
+                                  ([key, label]) => (
+                                    <option key={key} value={key}>
+                                      {label}
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                            ) : control === "combobox" ? (
+                              <>
+                                <Input
+                                  id={`answer-${field.key}`}
+                                  type={inputType}
+                                  inputMode={
+                                    field.presentation
+                                      ?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]
+                                  }
+                                  list={listId}
+                                  value={String(value ?? "")}
+                                  onChange={(event) =>
+                                    setAnswer(field.key, event.target.value)
+                                  }
+                                  placeholder={
+                                    placeholder ?? "Start typing to search"
+                                  }
+                                  required={field.required}
+                                />
+                                <datalist id={listId}>
+                                  {(field.suggestions ?? []).map(
+                                    (suggestion) => (
+                                      <option
+                                        key={suggestion}
+                                        value={suggestion}
+                                      />
+                                    ),
+                                  )}
+                                </datalist>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  id={`answer-${field.key}`}
+                                  type={inputType}
+                                  inputMode={
+                                    field.presentation
+                                      ?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]
+                                  }
                                   value={String(value ?? "")}
                                   onChange={(event) =>
                                     setAnswer(field.key, event.target.value)
                                   }
                                   placeholder={placeholder}
+                                  min={
+                                    field.type === "number" ||
+                                    field.type === "year"
+                                      ? field.validation?.min
+                                      : undefined
+                                  }
+                                  max={
+                                    field.type === "date" &&
+                                    field.validation?.before_or_equal ===
+                                      "today"
+                                      ? new Date().toISOString().slice(0, 10)
+                                      : field.type === "number" ||
+                                          field.type === "year"
+                                        ? field.validation?.max
+                                        : undefined
+                                  }
                                   required={field.required}
-                                  rows={5}
                                 />
-                              ) : field.type === "file" ? (
-                                <label className="border-input bg-background flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-sm">
-                                  <FileUp
-                                    className="text-muted-foreground size-5"
-                                    aria-hidden="true"
-                                  />
-                                  <span>
-                                    {value instanceof File
-                                      ? value.name
-                                      : "Choose a file"}
+                                {field.presentation?.unit && (
+                                  <span className="text-muted-foreground text-sm">
+                                    {field.presentation.unit}
                                   </span>
-                                  <Input
-                                    id={`answer-${field.key}`}
-                                    className="sr-only"
-                                    type="file"
-                                    onChange={(event) =>
-                                      setAnswer(
-                                        field.key,
-                                        event.target.files?.[0] ?? null,
-                                      )
-                                    }
-                                    required={field.required}
-                                  />
-                                </label>
-                              ) : isChoice && control === "combobox" ? (
-                                <Combobox
-                                  options={choiceOptions}
-                                  value={typeof value === "string" ? value : ""}
-                                  onValueChange={(selectedValue) =>
-                                    setAnswer(field.key, selectedValue)
-                                  }
-                                  placeholder={
-                                    placeholder ?? "Choose an option"
-                                  }
-                                  searchPlaceholder={`Search ${field.label.toLowerCase()}…`}
-                                  emptyText="No matching options."
-                                  required={field.required}
-                                />
-                              ) : isChoice &&
-                                (control === "radio_cards" ||
-                                  field.type === "radio" ||
-                                  field.type === "yes_no") ? (
-                                <div
-                                  className="grid gap-2 sm:grid-cols-2"
-                                  role="radiogroup"
-                                  aria-label={field.label}
-                                >
-                                  {Object.entries(field.options).map(
-                                    ([key, label]) => (
-                                      <label
-                                        key={key}
-                                        className={`border-border/70 hover:bg-muted/40 flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm transition ${value === key ? "border-primary bg-primary/5" : ""}`}
-                                      >
-                                        <input
-                                          className="accent-primary"
-                                          type="radio"
-                                          name={`answer-${field.key}`}
-                                          value={key}
-                                          checked={value === key}
-                                          onChange={() =>
-                                            setAnswer(field.key, key)
-                                          }
-                                          required={field.required}
-                                        />
-                                        {label}
-                                      </label>
-                                    ),
-                                  )}
-                                </div>
-                              ) : isChoice ? (
-                                <select
-                                  id={`answer-${field.key}`}
-                                  className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-                                  value={String(value ?? "")}
-                                  onChange={(event) =>
-                                    setAnswer(field.key, event.target.value)
-                                  }
-                                  required={field.required}
-                                >
-                                  <option value="">Choose an option</option>
-                                  {Object.entries(field.options).map(
-                                    ([key, label]) => (
-                                      <option key={key} value={key}>
-                                        {label}
-                                      </option>
-                                    ),
-                                  )}
-                                </select>
-                              ) : control === "combobox" ? (
-                                <>
-                                  <Input
-                                    id={`answer-${field.key}`}
-                                    type={inputType}
-                                    inputMode={
-                                      field.presentation
-                                        ?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]
-                                    }
-                                    list={listId}
-                                    value={String(value ?? "")}
-                                    onChange={(event) =>
-                                      setAnswer(field.key, event.target.value)
-                                    }
-                                    placeholder={
-                                      placeholder ?? "Start typing to search"
-                                    }
-                                    required={field.required}
-                                  />
-                                  <datalist id={listId}>
-                                    {(field.suggestions ?? []).map(
-                                      (suggestion) => (
-                                        <option
-                                          key={suggestion}
-                                          value={suggestion}
-                                        />
-                                      ),
-                                    )}
-                                  </datalist>
-                                </>
-                              ) : (
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    id={`answer-${field.key}`}
-                                    type={inputType}
-                                    inputMode={
-                                      field.presentation
-                                        ?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]
-                                    }
-                                    value={String(value ?? "")}
-                                    onChange={(event) =>
-                                      setAnswer(field.key, event.target.value)
-                                    }
-                                    placeholder={placeholder}
-                                    required={field.required}
-                                  />
-                                  {field.presentation?.unit && (
-                                    <span className="text-muted-foreground text-sm">
-                                      {field.presentation.unit}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              {formState.errors[`answers.${field.key}`] && (
-                                <p
-                                  className="text-destructive mt-2 text-xs"
-                                  role="alert"
-                                >
-                                  {formState.errors[`answers.${field.key}`]}
-                                </p>
-                              )}
-                            </div>
+                                )}
+                              </div>
+                            )}
+                            {formState.errors[`answers.${field.key}`] && (
+                              <p
+                                className="text-destructive mt-2 text-xs"
+                                role="alert"
+                              >
+                                {formState.errors[`answers.${field.key}`]}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
-                    );
-                  })}
-                </section>
-              ))}
+                    </div>
+                  );
+                })}
+              </section>
             </fieldset>
 
             {formState.errors.form && (
               <p className="text-destructive text-sm" role="alert">
                 {formState.errors.form}
+              </p>
+            )}
+            {pageError && (
+              <p className="text-destructive text-sm" role="alert">
+                {pageError}
               </p>
             )}
             <div className="border-border/70 bg-card flex flex-col gap-4 rounded-xl border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -828,23 +907,50 @@ export default function PublicFormShow({
                     ? "Saved securely for manual review."
                     : "Responses are encrypted and protected."}
               </p>
-              <Button
-                type="submit"
-                size="lg"
-                disabled={formState.processing || preview || formLocked}
-              >
-                {preview
-                  ? "Preview only"
-                  : formState.processing
-                    ? "Submitting…"
-                    : "Submit response"}
-                {!preview &&
-                  (formState.processing ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {activePageIndex > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCurrentPage((page) => Math.max(page - 1, 0));
+                      setPageError(null);
+                    }}
+                    disabled={formState.processing}
+                  >
+                    Back
+                  </Button>
+                )}
+                {isLastPage ? (
+                  <Button
+                    type="submit"
+                    size="lg"
+                    disabled={formState.processing || preview || formLocked}
+                  >
+                    {preview
+                      ? "Preview only"
+                      : formState.processing
+                        ? "Submitting…"
+                        : "Submit response"}
+                    {!preview &&
+                      (formState.processing ? (
+                        <ChevronRight className="size-4" />
+                      ) : (
+                        <Send className="size-4" />
+                      ))}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={goToNextPage}
+                    disabled={preview || formLocked}
+                  >
+                    Continue
                     <ChevronRight className="size-4" />
-                  ) : (
-                    <Send className="size-4" />
-                  ))}
-              </Button>
+                  </Button>
+                )}
+              </div>
             </div>
           </form>
         </div>
