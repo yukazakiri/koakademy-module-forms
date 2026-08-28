@@ -2,6 +2,14 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.2.0 - 2026-08-28
+
+- Fixed the form builder save request so edited forms persist correctly.
+- Added Shadcn/Sonner success and error notifications for save and publish actions.
+- Redesigned Student Profile Completion responses with clearer sections, progress,
+  field guidance, and student-friendly placeholders.
+- Removed social-media fields from the built-in Student Profile Completion form.
+
 ## 1.1.1 - 2026-08-27
 
 - Fixed `ArgumentCountError` when resolving the student field suggestion and

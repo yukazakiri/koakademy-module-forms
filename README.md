@@ -57,6 +57,9 @@ application's approved student profile catalog. It renders only fields that are
 still blank for the invited student and groups them into short sections. A
 submission is bound to its invitation on the server, stored encrypted, and
 applies only values that are still blank while the target record is locked.
+The published student view includes section guidance, completion progress,
+friendly placeholders, and short explanations for profile questions. Social
+media fields are intentionally excluded from this built-in template.
 
 Existing normalized student and relation columns are used when available.
 Sparse or evolving fields are stored under stable keys in the host's

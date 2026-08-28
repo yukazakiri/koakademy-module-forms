@@ -167,34 +167,32 @@ export default function FormsBuilder({
     event.preventDefault();
     const payload = { ...formState.data, fields };
     if (isEditing && form?.id) {
-      formState
-        .transform(() => payload)
-        .put(formsRoutes.update.url(form.id), {
-          preserveScroll: true,
-          onSuccess: () =>
-            toast.success("Form saved", {
-              description: "Your changes have been saved.",
-            }),
-          onError: () =>
-            toast.error("Unable to save form", {
-              description: "Please review the highlighted fields and try again.",
-            }),
-        });
-      return;
-    }
-    formState
-      .transform(() => payload)
-      .post(formsRoutes.store.url(), {
+      formState.transform(() => payload);
+      formState.put(formsRoutes.update.url(form.id), {
         preserveScroll: true,
         onSuccess: () =>
           toast.success("Form saved", {
-            description: "Your form is ready for its next steps.",
+            description: "Your changes have been saved.",
           }),
         onError: () =>
           toast.error("Unable to save form", {
             description: "Please review the highlighted fields and try again.",
           }),
       });
+      return;
+    }
+    formState.transform(() => payload);
+    formState.post(formsRoutes.store.url(), {
+      preserveScroll: true,
+      onSuccess: () =>
+        toast.success("Form saved", {
+          description: "Your form is ready for its next steps.",
+        }),
+      onError: () =>
+        toast.error("Unable to save form", {
+          description: "Please review the highlighted fields and try again.",
+        }),
+    });
   }
 
   function publish(): void {

@@ -12,6 +12,128 @@ use Modules\Forms\Models\FormTemplate;
 
 final class FormTemplateService
 {
+    /** @var list<string> */
+    private const EXCLUDED_PROFILE_FIELDS = [
+        'facebook_contact',
+        'twitter',
+        'instagram',
+        'linkedin',
+    ];
+
+    /** @var array<string, string> */
+    private const PROFILE_DESCRIPTIONS = [
+        'first_name' => 'Use your official first name as it appears in your school records.',
+        'middle_name' => 'Enter your complete middle name, or leave this blank if you do not have one.',
+        'last_name' => 'Use your official family name as it appears in your school records.',
+        'suffix' => 'Add a suffix such as Jr. or III only if it is part of your legal name.',
+        'gender' => 'Choose the option that matches your official student record.',
+        'birth_date' => 'Enter the date shown on your birth certificate or school record.',
+        'email' => 'Use an email address that you check regularly for school communication.',
+        'phone' => 'Enter a phone number where the school can reach you. Include the country code when possible.',
+        'civil_status' => 'Choose your current civil status.',
+        'nationality' => 'Enter your citizenship or nationality, for example Filipino.',
+        'religion' => 'Enter the religion you identify with, if you wish to provide it.',
+        'current_address' => 'Include your house or unit, street, barangay, city, and province.',
+        'permanent_address' => 'Enter your permanent home address if it is different from your current address.',
+        'birthplace' => 'Enter the city or municipality and province where you were born.',
+        'weight' => 'Enter your current weight in kilograms.',
+        'height' => 'Enter your current height in centimeters.',
+        'ethnicity' => 'Enter the ethnic group you identify with, if applicable.',
+        'region_of_origin' => 'Enter the region where your family originates.',
+        'province_of_origin' => 'Enter the province where your family originates.',
+        'city_of_origin' => 'Enter the city or municipality where your family originates.',
+        'is_indigenous_person' => 'Choose Yes only if you identify as an Indigenous person.',
+        'indigenous_group' => 'If applicable, enter the name of your Indigenous group.',
+        'is_pwd' => 'Choose Yes if you are a person with disability.',
+        'pwd_type' => 'If applicable, describe the type of disability.',
+        'is_solo_parent' => 'Choose Yes if you are a solo parent.',
+        'is_senior_citizen' => 'Choose Yes if you are a senior citizen.',
+        'is_magna_carta' => 'Choose Yes if you are a Magna Carta beneficiary.',
+        'is_underprivileged' => 'Choose Yes if you are classified as underprivileged.',
+        'is_first_generation' => 'Choose Yes if you are the first person in your family to attend college.',
+        'family_income_bracket' => 'Choose the bracket that best represents your household income.',
+        'father_income_bracket' => 'Choose the bracket that best represents your father’s income, if applicable.',
+        'mother_income_bracket' => 'Choose the bracket that best represents your mother’s income, if applicable.',
+        'emergency_contact_name' => 'Enter the name of someone the school may contact in an emergency.',
+        'emergency_contact_phone' => 'Enter the emergency contact’s active phone number.',
+        'emergency_contact_address' => 'Enter the emergency contact’s complete address.',
+        'emergency_contact_relationship' => 'Describe how this person is related to you.',
+        'father_name' => 'Enter your father’s complete name as it should appear in school records.',
+        'father_occupation' => 'Enter your father’s current occupation, if applicable.',
+        'father_contact' => 'Enter a phone number where your father can be reached.',
+        'father_email' => 'Enter your father’s active email address, if available.',
+        'mother_name' => 'Enter your mother’s complete name as it should appear in school records.',
+        'mother_occupation' => 'Enter your mother’s current occupation, if applicable.',
+        'mother_contact' => 'Enter a phone number where your mother can be reached.',
+        'mother_email' => 'Enter your mother’s active email address, if available.',
+        'guardian_name' => 'Enter your guardian’s complete name, if applicable.',
+        'guardian_relationship' => 'Describe how your guardian is related to you.',
+        'guardian_contact' => 'Enter a phone number where your guardian can be reached.',
+        'guardian_email' => 'Enter your guardian’s active email address, if available.',
+        'family_address' => 'Enter the complete address where your family lives.',
+        'elementary_school' => 'Enter the full name of the elementary school you attended.',
+        'elementary_graduate_year' => 'Enter the year you graduated from elementary school.',
+        'elementary_school_address' => 'Enter the complete address of your elementary school.',
+        'junior_high_school_name' => 'Enter the full name of the junior high school you attended.',
+        'junior_high_graduation_year' => 'Enter the year you graduated from junior high school.',
+        'junior_high_school_address' => 'Enter the complete address of your junior high school.',
+        'senior_high_name' => 'Enter the full name of the senior high school you attended.',
+        'senior_high_graduate_year' => 'Enter the year you graduated from senior high school.',
+        'senior_high_address' => 'Enter the complete address of your senior high school.',
+        'scholarship_type' => 'Choose the scholarship or financial assistance that applies to you.',
+        'scholarship_details' => 'Add the scholarship name or details that will help the registrar verify it.',
+        'employment_status' => 'Choose the option that best describes your current work or study status.',
+        'employer_name' => 'Enter the name of your current employer, if applicable.',
+        'job_position' => 'Enter your current job title or position, if applicable.',
+        'employment_date' => 'Enter the date you started your current employment.',
+        'employed_by_institution' => 'Choose Yes if you are employed by the school or institution.',
+    ];
+
+    /** @var array<string, string> */
+    private const PROFILE_PLACEHOLDERS = [
+        'first_name' => 'e.g. Juan',
+        'middle_name' => 'e.g. Santos',
+        'last_name' => 'e.g. Dela Cruz',
+        'suffix' => 'e.g. Jr.',
+        'email' => 'name@example.com',
+        'phone' => '+63 912 345 6789',
+        'nationality' => 'e.g. Filipino',
+        'current_address' => 'House no., street, barangay, city, province',
+        'permanent_address' => 'House no., street, barangay, city, province',
+        'birthplace' => 'e.g. Quezon City, Metro Manila',
+        'weight' => 'e.g. 60',
+        'height' => 'e.g. 170',
+        'ethnicity' => 'e.g. Tagalog',
+        'region_of_origin' => 'e.g. Region IV-A',
+        'province_of_origin' => 'e.g. Laguna',
+        'city_of_origin' => 'e.g. Calamba City',
+        'indigenous_group' => 'Enter group name',
+        'pwd_type' => 'Enter disability type',
+        'emergency_contact_name' => 'e.g. Maria Dela Cruz',
+        'emergency_contact_phone' => 'e.g. 0912 345 6789',
+        'emergency_contact_address' => 'Complete home address',
+        'emergency_contact_relationship' => 'e.g. Mother',
+        'father_name' => 'e.g. Juan Dela Cruz Sr.',
+        'father_occupation' => 'e.g. Engineer',
+        'father_contact' => 'e.g. 0912 345 6789',
+        'father_email' => 'father@example.com',
+        'mother_name' => 'e.g. Maria Dela Cruz',
+        'mother_occupation' => 'e.g. Teacher',
+        'mother_contact' => 'e.g. 0912 345 6789',
+        'mother_email' => 'mother@example.com',
+        'guardian_name' => 'e.g. Maria Dela Cruz',
+        'guardian_relationship' => 'e.g. Aunt',
+        'guardian_contact' => 'e.g. 0912 345 6789',
+        'guardian_email' => 'guardian@example.com',
+        'family_address' => 'Complete family home address',
+        'elementary_school' => 'Full school name',
+        'junior_high_school_name' => 'Full school name',
+        'senior_high_name' => 'Full school name',
+        'scholarship_details' => 'Scholarship name or details',
+        'employer_name' => 'Company or organization name',
+        'job_position' => 'e.g. Part-time assistant',
+    ];
+
     public function __construct(
         private readonly FormsModelRegistry $models,
         private readonly FormsTenantResolver $tenantResolver,
@@ -152,7 +274,11 @@ final class FormTemplateService
                 'missing_only' => true,
                 'confirmation_message' => 'Your profile information has been received and the missing fields were updated.',
             ],
-            'fields' => collect($fields)->map(fn (array $field): array => $this->profileField($field))->values()->all(),
+            'fields' => collect($fields)
+                ->reject(fn (array $field): bool => in_array((string) ($field['key'] ?? ''), self::EXCLUDED_PROFILE_FIELDS, true))
+                ->map(fn (array $field): array => $this->profileField($field))
+                ->values()
+                ->all(),
         ];
     }
 
@@ -192,7 +318,7 @@ final class FormTemplateService
             'field_key' => $key,
             'label' => (string) ($field['label'] ?? Str::headline($key)),
             'type' => $type,
-            'description' => null,
+            'description' => self::PROFILE_DESCRIPTIONS[$key] ?? 'Enter the information as it should appear in your school record.',
             'section' => (string) ($field['group'] ?? 'Profile'),
             'required' => $this->isRequiredProfileField($key),
             'options' => $options,
@@ -202,6 +328,7 @@ final class FormTemplateService
                 'input_mode' => $type === 'phone' ? 'tel' : ($type === 'number' || $type === 'year' ? 'numeric' : 'text'),
                 'suggestion_source' => $recordSuggestions ? 'record_values' : 'none',
                 'suggestion_limit' => 10,
+                'placeholder' => self::PROFILE_PLACEHOLDERS[$key] ?? $this->defaultProfilePlaceholder($key, $type),
                 'unit' => match ($key) {
                     'height' => 'cm',
                     'weight' => 'kg',
@@ -230,6 +357,17 @@ final class FormTemplateService
         }
 
         return $fieldData;
+    }
+
+    private function defaultProfilePlaceholder(string $key, string $type): string
+    {
+        return match ($type) {
+            'date' => 'YYYY-MM-DD',
+            'email' => 'name@example.com',
+            'number', 'year' => 'Enter a number',
+            'phone' => 'e.g. 0912 345 6789',
+            default => 'Enter '.Str::headline($key),
+        };
     }
 
     private function isRequiredProfileField(string $key): bool

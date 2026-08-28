@@ -1,11 +1,21 @@
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import publicForms from "@/routes/forms";
 import axios from "axios";
 import { Head, useForm } from "@inertiajs/react";
-import { Check, ChevronRight, FileUp, LockKeyhole, Send } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  CircleHelp,
+  ClipboardCheck,
+  FileUp,
+  LockKeyhole,
+  Send,
+  ShieldCheck,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface FormField {
@@ -33,7 +43,10 @@ interface FormDefinition {
   description: string | null;
   access_mode: string;
   identity_type: string | null;
-  settings?: { allow_unverified_guest_response?: boolean };
+  settings?: {
+    allow_unverified_guest_response?: boolean;
+    template_key?: string;
+  };
   fields: FormField[];
 }
 
@@ -58,6 +71,55 @@ function visible(field: FormField, answers: Record<string, unknown>): boolean {
 
 function filled(value: unknown): boolean {
   return value !== undefined && value !== null && value !== "" && value !== false;
+}
+
+const profileSectionDescriptions: Record<string, string> = {
+  Identity: "Check your name and personal details carefully so they match your official records.",
+  Contact: "Use contact details that you check regularly so the school can reach you.",
+  Personal: "Provide the personal information requested by the registrar.",
+  Address: "Write your complete address, including barangay, city, and province.",
+  "Origin and Equity": "Answer these questions according to how you identify and what applies to you.",
+  "Emergency Contact": "Choose someone the school can reach quickly if an emergency occurs.",
+  "Parent and Guardian": "Enter the current details for your parent or guardian.",
+  Education: "List your previous schools and graduation details accurately.",
+  "Scholarship and Employment": "Select the options that best describe your current situation.",
+};
+
+const profileFieldDescriptions: Record<string, string> = {
+  first_name: "Use your official first name as it appears in your school records.",
+  middle_name: "Enter your complete middle name, or leave this blank if you do not have one.",
+  last_name: "Use your official family name as it appears in your school records.",
+  birth_date: "Enter the date shown on your birth certificate or school record.",
+  email: "Use an email address that you check regularly for school communication.",
+  phone: "Enter a phone number where the school can reach you.",
+  current_address: "Include your house or unit, street, barangay, city, and province.",
+  permanent_address: "Enter your permanent home address if it is different from your current address.",
+  birthplace: "Enter the city or municipality and province where you were born.",
+  nationality: "Enter your citizenship or nationality, for example Filipino.",
+  religion: "Enter the religion you identify with, if you wish to provide it.",
+  emergency_contact_name: "Enter the name of someone the school may contact in an emergency.",
+  emergency_contact_phone: "Enter the emergency contact’s active phone number.",
+  emergency_contact_relationship: "Describe how this person is related to you.",
+  father_name: "Enter your father’s complete name as it should appear in school records.",
+  mother_name: "Enter your mother’s complete name as it should appear in school records.",
+  guardian_name: "Enter your guardian’s complete name, if applicable.",
+  family_address: "Enter the complete address where your family lives.",
+  scholarship_details: "Add the scholarship name or details that will help the registrar verify it.",
+  employment_status: "Choose the option that best describes your current work or study status.",
+};
+
+function profilePlaceholder(field: FormField): string | undefined {
+  if (field.presentation?.placeholder) return field.presentation.placeholder;
+
+  const label = field.label.toLowerCase();
+  if (field.type === "date") return "YYYY-MM-DD";
+  if (field.type === "email") return "name@example.com";
+  if (field.type === "phone") return "e.g. 0912 345 6789";
+  if (field.type === "number") return "Enter a number";
+  if (field.type === "year") return "YYYY";
+  if (label.includes("address")) return "House no., street, barangay, city, province";
+
+  return `Enter ${label}`;
 }
 
 export default function PublicFormShow({
@@ -86,6 +148,7 @@ export default function PublicFormShow({
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identityFallbackAvailable, setIdentityFallbackAvailable] = useState(false);
   const formLocked = requiresStudentVerification && !identityVerified && !identityUnverified;
+  const isStudentProfileForm = form.settings?.template_key === "student_profile_completion";
   const visibleFields = useMemo(
     () => form.fields.filter((field) => visible(field, formState.data.answers)),
     [form.fields, formState.data.answers],
@@ -105,6 +168,11 @@ export default function PublicFormShow({
           100,
       )
     : 0;
+  const completedCount = visibleFields.filter((field) => filled(formState.data.answers[field.key])).length;
+  const fieldNumbers = useMemo(
+    () => new Map(visibleFields.map((field, index) => [field.key, index + 1])),
+    [visibleFields],
+  );
 
   function setAnswer(key: string, value: unknown): void {
     formState.setData("answers", { ...formState.data.answers, [key]: value });
@@ -197,8 +265,17 @@ export default function PublicFormShow({
           <header className="border-border/70 bg-card relative overflow-hidden rounded-2xl border p-6 shadow-sm sm:p-9">
             <div className="from-primary/15 pointer-events-none absolute -top-28 -right-16 size-64 rounded-full bg-gradient-to-br to-emerald-500/10 blur-3xl" />
             <div className="relative">
-              <div className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-xl">
-                <LockKeyhole className="size-5" aria-hidden="true" />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-xl">
+                  {isStudentProfileForm ? (
+                    <ClipboardCheck className="size-5" aria-hidden="true" />
+                  ) : (
+                    <LockKeyhole className="size-5" aria-hidden="true" />
+                  )}
+                </div>
+                <Badge variant="secondary">
+                  {isStudentProfileForm ? "Student profile update" : "Secure response"}
+                </Badge>
               </div>
               <p className="text-muted-foreground mt-6 text-xs font-semibold tracking-[0.12em] uppercase">
                 {preview ? "Administrator preview" : invitation ? "Personal profile update" : "Secure response"}
@@ -216,6 +293,28 @@ export default function PublicFormShow({
                   {form.description}
                 </p>
               )}
+              {isStudentProfileForm && (
+                <div className="border-primary/20 bg-primary/5 mt-6 grid gap-3 rounded-xl border p-4 sm:grid-cols-3">
+                  <div className="flex gap-3">
+                    <CircleHelp className="text-primary mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <p className="text-muted-foreground text-xs leading-5">
+                      Complete only the information the school still needs.
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <ShieldCheck className="text-primary mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <p className="text-muted-foreground text-xs leading-5">
+                      Use details that match your official records.
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <ClipboardCheck className="text-primary mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                    <p className="text-muted-foreground text-xs leading-5">
+                      Review your answers before submitting.
+                    </p>
+                  </div>
+                </div>
+              )}
               {invitation?.expires_at && (
                 <p className="text-muted-foreground mt-5 text-xs">
                   This private link expires {new Date(invitation.expires_at).toLocaleDateString()} and can be used once.
@@ -226,28 +325,40 @@ export default function PublicFormShow({
 
           <div className="border-border/70 bg-card rounded-xl border p-4 shadow-sm sm:p-5">
             <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="font-medium">Your progress</span>
-              <span className="text-muted-foreground">{completion}%</span>
+              <div>
+                <span className="font-medium">
+                  {isStudentProfileForm ? "Profile completion" : "Your progress"}
+                </span>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {completedCount} of {visibleFields.length} {isStudentProfileForm ? "fields" : "questions"} answered
+                </p>
+              </div>
+              <span className="text-primary text-lg font-semibold">{completion}%</span>
             </div>
             <Progress value={completion} className="mt-3" aria-label={`Form completion ${completion}%`} />
           </div>
 
           <form onSubmit={submit} className="flex flex-col gap-5">
             {form.access_mode === "guest_identifier" && (
-              <section className="border-border/70 bg-card rounded-xl border p-5 shadow-sm">
+              <section className="border-primary/20 bg-card rounded-xl border p-5 shadow-sm sm:p-6">
                 {form.identity_type === "student_id" ? (
                   <div className="flex flex-col gap-4">
                     <div>
-                      <p className="text-sm font-semibold">Verify your student record</p>
-                      <p className="text-muted-foreground mt-1 text-xs leading-5">Enter your Student ID and the email address registered with the school. Your approved form fields will be prefilled after verification.</p>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-xs font-semibold">0</span>
+                        <p className="text-sm font-semibold">First, verify your student record</p>
+                      </div>
+                      <p className="text-muted-foreground mt-2 pl-9 text-xs leading-5">Enter both details exactly as registered with the school. Matching records will automatically prefill the available profile fields.</p>
                     </div>
                     <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="respondent-student-id">
                       Student ID
-                      <Input id="respondent-student-id" value={formState.data.respondent_identifier} onChange={(event) => setIdentity("respondent_identifier", event.target.value)} required />
+                      <Input id="respondent-student-id" value={formState.data.respondent_identifier} onChange={(event) => setIdentity("respondent_identifier", event.target.value)} placeholder="e.g. 2024-000123" required />
+                      <span className="text-muted-foreground text-xs font-normal">Use the ID shown on your student card or school record.</span>
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="respondent-email">
                       Registered email
-                      <Input id="respondent-email" type="email" value={formState.data.respondent_email} onChange={(event) => setIdentity("respondent_email", event.target.value)} required />
+                      <Input id="respondent-email" type="email" value={formState.data.respondent_email} onChange={(event) => setIdentity("respondent_email", event.target.value)} placeholder="name@example.com" required />
+                      <span className="text-muted-foreground text-xs font-normal">Use the email address currently saved in your student record.</span>
                     </label>
                     <div className="flex flex-wrap items-center gap-3">
                       <Button type="button" variant="secondary" onClick={verifyStudent} disabled={identityLoading || !formState.data.respondent_identifier || !formState.data.respondent_email}>
@@ -286,16 +397,30 @@ export default function PublicFormShow({
             )}
 
             <fieldset disabled={formLocked} className="contents">
-              {sections.map(([section, fields]) => (
+              {sections.map(([section, fields], sectionIndex) => (
               <section key={section} className="flex flex-col gap-4">
-                <div className="px-1">
-                  <p className="text-primary text-xs font-semibold tracking-[0.12em] uppercase">Section</p>
-                  <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em]">{section}</h2>
+                <div className="flex items-start gap-3 px-1">
+                  <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
+                    {sectionIndex + 1}
+                  </span>
+                  <div>
+                    <p className="text-primary text-xs font-semibold tracking-[0.12em] uppercase">
+                      Section {sectionIndex + 1}
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em]">{section}</h2>
+                    {isStudentProfileForm && profileSectionDescriptions[section] && (
+                      <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-6">
+                        {profileSectionDescriptions[section]}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {fields.map((field, index) => {
                   const value = formState.data.answers[field.key];
                   const control = field.presentation?.control;
                   const listId = `suggestions-${field.key}`;
+                  const description = field.description ?? (isStudentProfileForm ? profileFieldDescriptions[field.key] ?? "Enter the information as it should appear in your school record." : null);
+                  const placeholder = profilePlaceholder(field);
                   const inputType =
                     field.type === "number" || field.type === "year"
                       ? "number"
@@ -308,20 +433,24 @@ export default function PublicFormShow({
                             : "text";
                   const isChoice = ["select", "radio", "yes_no"].includes(field.type);
                   return (
-                    <div key={field.key} className="border-border/70 bg-card rounded-xl border p-5 shadow-sm sm:p-6">
+                    <div key={field.key} className="border-border/70 bg-card rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6">
                       <div className="flex items-start gap-3">
-                        <span className="bg-primary/10 text-primary mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-                          {index + 1}
+                        <span className="bg-muted text-muted-foreground mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                          {fieldNumbers.get(field.key) ?? index + 1}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <label className="text-sm font-semibold" htmlFor={`answer-${field.key}`}>
-                            {field.label}
-                            {field.required && <span className="text-destructive ml-1" aria-label="required">*</span>}
-                          </label>
-                          {field.description && <p className="text-muted-foreground mt-1 text-xs leading-5">{field.description}</p>}
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <label className="text-sm font-semibold" htmlFor={`answer-${field.key}`}>
+                              {field.label}
+                            </label>
+                            <Badge variant={field.required ? "outline" : "secondary"}>
+                              {field.required ? "Required" : "Optional"}
+                            </Badge>
+                          </div>
+                          {description && <p className="text-muted-foreground mt-2 text-xs leading-5">{description}</p>}
                           <div className="mt-4">
                             {field.type === "textarea" ? (
-                              <Textarea id={`answer-${field.key}`} value={String(value ?? "")} onChange={(event) => setAnswer(field.key, event.target.value)} required={field.required} rows={5} />
+                              <Textarea id={`answer-${field.key}`} value={String(value ?? "")} onChange={(event) => setAnswer(field.key, event.target.value)} placeholder={placeholder} required={field.required} rows={5} />
                             ) : field.type === "file" ? (
                               <label className="border-input bg-background flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-sm">
                                 <FileUp className="text-muted-foreground size-5" aria-hidden="true" />
@@ -344,12 +473,12 @@ export default function PublicFormShow({
                               </select>
                             ) : control === "combobox" ? (
                               <>
-                                <Input id={`answer-${field.key}`} type={inputType} inputMode={field.presentation?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]} list={listId} value={String(value ?? "")} onChange={(event) => setAnswer(field.key, event.target.value)} placeholder={field.presentation?.placeholder ?? "Start typing to search"} required={field.required} />
+                                <Input id={`answer-${field.key}`} type={inputType} inputMode={field.presentation?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]} list={listId} value={String(value ?? "")} onChange={(event) => setAnswer(field.key, event.target.value)} placeholder={placeholder ?? "Start typing to search"} required={field.required} />
                                 <datalist id={listId}>{(field.suggestions ?? []).map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>
                               </>
                             ) : (
                               <div className="flex items-center gap-2">
-                                <Input id={`answer-${field.key}`} type={inputType} inputMode={field.presentation?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]} value={String(value ?? "")} onChange={(event) => setAnswer(field.key, event.target.value)} placeholder={field.presentation?.placeholder} required={field.required} />
+                                <Input id={`answer-${field.key}`} type={inputType} inputMode={field.presentation?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]} value={String(value ?? "")} onChange={(event) => setAnswer(field.key, event.target.value)} placeholder={placeholder} required={field.required} />
                                 {field.presentation?.unit && <span className="text-muted-foreground text-sm">{field.presentation.unit}</span>}
                               </div>
                             )}

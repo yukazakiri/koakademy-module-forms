@@ -62,6 +62,13 @@ it('generates the built-in student template from approved host fields', function
     $registry = Mockery::mock(FormsModelRegistry::class);
     $registry->shouldReceive('fields')->with('student')->andReturn([
         [
+            'key' => 'instagram',
+            'label' => 'Instagram',
+            'type' => 'string',
+            'group' => 'Contact',
+            'write_paths' => ['details.instagram'],
+        ],
+        [
             'key' => 'birthplace',
             'label' => 'Birthplace',
             'type' => 'string',
@@ -78,7 +85,10 @@ it('generates the built-in student template from approved host fields', function
         ->toHaveKey('fields')
         ->and($definition['settings']['mapping_mode'])->toBe('auto_fill_empty')
         ->and($definition['settings']['allow_unverified_guest_response'])->toBeTrue()
+        ->and(collect($definition['fields'])->pluck('field_key')->all())->not->toContain('instagram')
         ->and($definition['fields'][0]['mapping'])->toBe(['model' => 'student', 'path' => 'details.birthplace'])
+        ->and($definition['fields'][0]['description'])->not->toBeNull()
+        ->and($definition['fields'][0]['presentation']['placeholder'])->toBe('e.g. Quezon City, Metro Manila')
         ->and($definition['fields'][0]['presentation']['control'])->toBe('combobox');
 });
 
