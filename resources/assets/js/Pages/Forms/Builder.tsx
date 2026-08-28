@@ -24,6 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 interface FormField {
   field_key: string;
@@ -132,6 +133,7 @@ export default function FormsBuilder({
   const data = useMemo(() => initialData(form), [form]);
   const formState = useForm<FormData>({ ...data, fields });
   const isEditing = Boolean(form?.id);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   function updateField(index: number, patch: Partial<FormField>): void {
     setFields((current) =>
@@ -167,17 +169,50 @@ export default function FormsBuilder({
     if (isEditing && form?.id) {
       formState
         .transform(() => payload)
-        .put(formsRoutes.update.url(form.id), { preserveScroll: true });
+        .put(formsRoutes.update.url(form.id), {
+          preserveScroll: true,
+          onSuccess: () =>
+            toast.success("Form saved", {
+              description: "Your changes have been saved.",
+            }),
+          onError: () =>
+            toast.error("Unable to save form", {
+              description: "Please review the highlighted fields and try again.",
+            }),
+        });
       return;
     }
     formState
       .transform(() => payload)
-      .post(formsRoutes.store.url(), { preserveScroll: true });
+      .post(formsRoutes.store.url(), {
+        preserveScroll: true,
+        onSuccess: () =>
+          toast.success("Form saved", {
+            description: "Your form is ready for its next steps.",
+          }),
+        onError: () =>
+          toast.error("Unable to save form", {
+            description: "Please review the highlighted fields and try again.",
+          }),
+      });
   }
 
   function publish(): void {
-    if (!form?.id) return;
-    router.post(formsRoutes.publish.url(form.id), {}, { preserveScroll: true });
+    if (!form?.id || isPublishing) return;
+
+    setIsPublishing(true);
+    router.post(formsRoutes.publish.url(form.id), {}, {
+      preserveScroll: true,
+      onSuccess: () =>
+        toast.success("Form published", {
+          description: "The form is now ready to receive responses.",
+        }),
+      onError: () =>
+        toast.error("Unable to publish form", {
+          description: "Please review the form and try again.",
+        }),
+      onFinish: () => setIsPublishing(false),
+    });
   }
 
   return (
@@ -205,8 +240,13 @@ export default function FormsBuilder({
               <Link href={formsRoutes.index.url()}>Cancel</Link>
             </Button>
             {isEditing && form?.status !== "published" && (
-              <Button type="button" variant="secondary" onClick={publish}>
-                Publish
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={publish}
+                disabled={isPublishing}
+              >
+                {isPublishing ? "Publishing…" : "Publish"}
               </Button>
             )}
             <Button type="submit" disabled={formState.processing}>
