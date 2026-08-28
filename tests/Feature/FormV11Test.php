@@ -77,6 +77,7 @@ it('generates the built-in student template from approved host fields', function
     expect($definition)
         ->toHaveKey('fields')
         ->and($definition['settings']['mapping_mode'])->toBe('auto_fill_empty')
+        ->and($definition['settings']['allow_unverified_guest_response'])->toBeTrue()
         ->and($definition['fields'][0]['mapping'])->toBe(['model' => 'student', 'path' => 'details.birthplace'])
         ->and($definition['fields'][0]['presentation']['control'])->toBe('combobox');
 });

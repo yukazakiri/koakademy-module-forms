@@ -38,6 +38,7 @@ final class SubmitFormRequest extends FormRequest
 
             if ($form->identity_type === 'student_id') {
                 $rules['respondent_email'] = ['required', 'email', 'max:255'];
+                $rules['respondent_identity_unverified'] = ['sometimes', 'boolean'];
             }
         }
 

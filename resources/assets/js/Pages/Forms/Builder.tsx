@@ -48,7 +48,7 @@ interface FormData {
   access_mode: string;
   identity_type: string;
   closes_at: string;
-  settings: { allow_resubmit: boolean; confirmation_message?: string; mapping_mode?: string; invitation_expiry_days?: number };
+  settings: { allow_resubmit: boolean; allow_unverified_guest_response?: boolean; confirmation_message?: string; mapping_mode?: string; invitation_expiry_days?: number };
   fields: FormField[];
 }
 
@@ -107,6 +107,10 @@ function initialData(form: Props["form"]): FormData {
     closes_at: form?.closes_at ? form.closes_at.slice(0, 16) : "",
     settings: {
       allow_resubmit: Boolean(form?.settings?.allow_resubmit),
+      allow_unverified_guest_response:
+        form?.settings?.allow_unverified_guest_response ??
+        (form?.access_mode === "guest_identifier" &&
+          form?.identity_type === "student_id"),
       confirmation_message: form?.settings?.confirmation_message ?? "",
       mapping_mode: form?.settings?.mapping_mode ?? "review",
       invitation_expiry_days: Number(form?.settings?.invitation_expiry_days ?? 30),
@@ -298,14 +302,54 @@ export default function FormsBuilder({
                       id="identity-type"
                       className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
                       value={formState.data.identity_type}
-                      onChange={(event) =>
-                        formState.setData("identity_type", event.target.value)
-                      }
+                      onChange={(event) => {
+                        const identityType = event.target.value;
+                        formState.setData("identity_type", identityType);
+                        if (identityType !== "student_id") {
+                          formState.setData("settings", {
+                            ...formState.data.settings,
+                            allow_unverified_guest_response: false,
+                          });
+                        }
+                      }}
                     >
                       <option value="email">Email address</option>
                       <option value="student_id">Student ID + registered email</option>
                     </select>
-                    {formState.data.identity_type === "student_id" && <p className="text-muted-foreground text-xs">Guests must verify both values before mapped student fields are prefilled.</p>}
+                    {formState.data.identity_type === "student_id" && (
+                      <div className="space-y-3">
+                        <p className="text-muted-foreground text-xs">
+                          Guests must verify both values before mapped student
+                          fields are prefilled.
+                        </p>
+                        <label className="text-muted-foreground flex items-start gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={Boolean(
+                              formState.data.settings
+                                .allow_unverified_guest_response,
+                            )}
+                            onChange={(event) =>
+                              formState.setData("settings", {
+                                ...formState.data.settings,
+                                allow_unverified_guest_response:
+                                  event.target.checked,
+                              })
+                            }
+                          />
+                          <span>
+                            <span className="text-foreground block font-medium">
+                              Allow unmatched responses for manual review
+                            </span>
+                            <span className="mt-1 block text-xs">
+                              If no student record matches, save the response
+                              without linking or updating a record.
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+                    )}
                   </div>
                 )}
                 {formState.data.access_mode === "invitation" && (

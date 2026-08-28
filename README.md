@@ -41,6 +41,7 @@ application worker.
 ## Features
 
 - Authenticated, guest email, verified Student ID + email, or anonymous responses.
+- Optional unmatched Student ID + email submissions stored for manual review without automatic record updates.
 - Text, long text, email, phone, number, year, date, select, radio, checkbox, yes/no, file, and rating fields.
 - Response revision history, duplicate-response policy, close dates, CSV export, and protected uploads.
 - Review-before-apply workflow for model mappings.
@@ -171,19 +172,27 @@ responses use the configured email or verified Student ID + registered email
 to resolve a student. Student-ID forms prefill only the form's approved Student
 mappings after verification; the same verification is repeated when the response
 is submitted. Do not use Student ID alone for forms that expose personal data.
-Anonymous responses remain unlinked unless a host integration supplies an
-approved identity workflow. Answers are stored first; they never update a
-student record merely because a mapping was configured.
+The built-in Student Profile Completion template allows an unmatched Student ID
+and registered email pair to continue for manual review. These responses are encrypted and
+kept unmatched, do not update a student record automatically, and are marked
+**manual review** in the response workspace. Administrators must verify the
+submitted identity before applying anything; unmatched responses cannot be
+applied directly. Anonymous responses remain unlinked unless a host integration
+supplies an approved identity workflow. Answers are stored first; they never
+update a student record merely because a mapping was configured.
 
 ## Review and apply responses
 
 1. Return to Online Forms and select **View responses**.
 2. Inspect the respondent, revisions, answers, sensitive markers, and record
    link status.
-3. Choose **Apply blank fields only** to avoid overwriting existing values.
-4. Use **Apply and overwrite** only when the submitted answer has been
+3. For a **manual review** response, verify the Student ID and email against
+   school records outside the form before updating the student manually.
+4. Choose **Apply blank fields only** to avoid overwriting existing values on
+   a response with a verified link.
+5. Use **Apply and overwrite** only when the submitted answer has been
    verified and the operator has permission to overwrite data.
-5. Use **Export CSV** when a controlled offline review is required, and
+6. Use **Export CSV** when a controlled offline review is required, and
    protect the exported file like the original records.
 
 Every mapping application and export is audited. Configure retention,

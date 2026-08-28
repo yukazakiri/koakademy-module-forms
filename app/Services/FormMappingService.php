@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Modules\Forms\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Modules\Forms\Contracts\FormsLockableModelRegistry;
 use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Models\FormResponse;
@@ -21,6 +22,12 @@ final class FormMappingService
     public function apply(FormResponse $response, bool $overwrite = false, ?object $actor = null): FormResponse
     {
         return DB::transaction(function () use ($response, $overwrite, $actor): FormResponse {
+            if ($response->links->contains(fn (FormResponseLink $link): bool => $link->model_id === null || $link->status === 'unmatched')) {
+                throw ValidationException::withMessages([
+                    'response' => 'This response needs manual record matching before it can be applied.',
+                ]);
+            }
+
             $answers = $this->answers->latestAnswers($response);
             $applied = 0;
             $skipped = [];

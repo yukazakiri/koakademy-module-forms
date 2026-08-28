@@ -43,12 +43,10 @@ final class FormResponseService
             : $this->normalizeIdentifier($validated['respondent_email'] ?? null);
         $identifier = $this->normalizeIdentifier($validated['respondent_identifier'] ?? null);
         $userId = data_get($user, 'id');
-        $guestRecord = $form->access_mode === FormAccessMode::GuestIdentifier
-            && $form->identity_type === 'student_id'
-            ? $this->guestIdentities->resolve($form, (string) $identifier, (string) $email)
-            : null;
+        $identityUnverified = (bool) ($validated['respondent_identity_unverified'] ?? false);
+        $guestRecord = $this->resolveGuestRecord($form, $identifier, $email, $identityUnverified);
 
-        return DB::transaction(function () use ($form, $answers, $email, $identifier, $userId, $user, $invitation, $guestRecord): FormResponse {
+        return DB::transaction(function () use ($form, $answers, $email, $identifier, $userId, $user, $invitation, $guestRecord, $identityUnverified): FormResponse {
             if ($invitation instanceof FormInvitation) {
                 $invitation = FormInvitation::query()
                     ->whereKey($invitation->getKey())
@@ -106,10 +104,14 @@ final class FormResponseService
             ]);
 
             $response->update(['latest_revision' => $revision]);
-            $this->createLinks($form, $response, $user, $email, $identifier, $invitation, $guestRecord);
-            $this->audit->record($form, 'response_submitted', $response, ['revision' => $revision]);
+            $this->createLinks($form, $response, $user, $email, $identifier, $invitation, $guestRecord, $identityUnverified);
+            $this->audit->record($form, 'response_submitted', $response, [
+                'revision' => $revision,
+                'guest_identity_unverified' => $identityUnverified && $guestRecord === null,
+            ]);
 
-            if (data_get($form->settings, 'mapping_mode') === 'auto_fill_empty') {
+            if (data_get($form->settings, 'mapping_mode') === 'auto_fill_empty'
+                && ! ($identityUnverified && $guestRecord === null)) {
                 $response = $this->mapping->apply($response->load('form.fields', 'links'), false, $user);
             }
 
@@ -129,6 +131,23 @@ final class FormResponseService
     public function latestAnswers(FormResponse $response): array
     {
         return $this->answers->latestAnswers($response);
+    }
+
+    private function resolveGuestRecord(Form $form, ?string $identifier, ?string $email, bool $identityUnverified): ?object
+    {
+        if ($form->access_mode !== FormAccessMode::GuestIdentifier || $form->identity_type !== 'student_id') {
+            return null;
+        }
+
+        try {
+            return $this->guestIdentities->resolve($form, (string) $identifier, (string) $email);
+        } catch (ValidationException $exception) {
+            if ($identityUnverified && (bool) data_get($form->settings, 'allow_unverified_guest_response', false)) {
+                return null;
+            }
+
+            throw $exception;
+        }
     }
 
     private function findExisting(Form $form, ?string $userId, ?string $email, ?string $identifier): ?FormResponse
@@ -158,7 +177,7 @@ final class FormResponseService
         return null;
     }
 
-    private function createLinks(Form $form, FormResponse $response, ?object $user, ?string $email, ?string $identifier, ?FormInvitation $invitation = null, ?object $guestRecord = null): void
+    private function createLinks(Form $form, FormResponse $response, ?object $user, ?string $email, ?string $identifier, ?FormInvitation $invitation = null, ?object $guestRecord = null, bool $identityUnverified = false): void
     {
         $modelKeys = $form->fields
             ->map(fn ($field): ?string => is_array($field->mapping) ? ($field->mapping['model'] ?? null) : null)
@@ -167,17 +186,16 @@ final class FormResponseService
             ->values();
 
         foreach ($modelKeys as $modelKey) {
-            $record = $invitation instanceof FormInvitation
-                ? $this->invitationTargets->resolve($invitation)
-                : ($guestRecord !== null && $modelKey === 'student'
-                ? $guestRecord
-                : ($user !== null
-                ? $this->models->resolveForUser($modelKey, $user)
-                : (($identifier !== null && $form->identity_type !== null)
-                    ? $this->models->resolveByIdentifier($modelKey, $form->identity_type, $identifier)
-                    : ($email !== null && $form->identity_type !== null
-                        ? $this->models->resolveByIdentifier($modelKey, $form->identity_type, $email)
-                        : null))));
+            $record = $this->resolveLinkedRecord(
+                $form,
+                $modelKey,
+                $user,
+                $email,
+                $identifier,
+                $invitation,
+                $guestRecord,
+                $identityUnverified,
+            );
 
             FormResponseLink::query()->updateOrCreate(
                 ['form_response_id' => $response->getKey(), 'model_key' => $modelKey],
@@ -186,12 +204,53 @@ final class FormResponseService
                     'model_id' => $record === null ? null : (string) $record->getKey(),
                     'match_method' => $invitation instanceof FormInvitation
                         ? 'invitation'
-                        : ($user !== null ? 'authenticated_user' : ($record === null ? null : 'guest_identifier')),
+                        : ($user !== null
+                            ? 'authenticated_user'
+                            : ($record === null
+                                ? ($identityUnverified ? 'guest_unverified' : null)
+                                : 'guest_identifier')),
                     'status' => $record === null ? 'unmatched' : 'pending',
                     'error_message' => $record === null ? 'No approved record matched the submitted identity.' : null,
                 ],
             );
         }
+    }
+
+    private function resolveLinkedRecord(
+        Form $form,
+        string $modelKey,
+        ?object $user,
+        ?string $email,
+        ?string $identifier,
+        ?FormInvitation $invitation,
+        ?object $guestRecord,
+        bool $identityUnverified,
+    ): ?object {
+        if ($invitation instanceof FormInvitation) {
+            return $this->invitationTargets->resolve($invitation);
+        }
+
+        if ($guestRecord !== null && $modelKey === 'student') {
+            return $guestRecord;
+        }
+
+        if ($identityUnverified) {
+            return null;
+        }
+
+        if ($user !== null) {
+            return $this->models->resolveForUser($modelKey, $user);
+        }
+
+        if ($identifier !== null && $form->identity_type !== null) {
+            return $this->models->resolveByIdentifier($modelKey, $form->identity_type, $identifier);
+        }
+
+        if ($email !== null && $form->identity_type !== null) {
+            return $this->models->resolveByIdentifier($modelKey, $form->identity_type, $email);
+        }
+
+        return null;
     }
 
     private function normalizeIdentifier(mixed $value): ?string

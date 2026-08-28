@@ -33,6 +33,7 @@ interface FormDefinition {
   description: string | null;
   access_mode: string;
   identity_type: string | null;
+  settings?: { allow_unverified_guest_response?: boolean };
   fields: FormField[];
 }
 
@@ -69,17 +70,22 @@ export default function PublicFormShow({
   const formState = useForm<{
     respondent_email: string;
     respondent_identifier: string;
+    respondent_identity_unverified: boolean;
     answers: Record<string, unknown>;
   }>({
     respondent_email: user?.email ?? "",
     respondent_identifier: "",
+    respondent_identity_unverified: false,
     answers: {},
   });
   const requiresStudentVerification = form.access_mode === "guest_identifier" && form.identity_type === "student_id" && !preview;
+  const allowUnverifiedGuestResponse = requiresStudentVerification && Boolean(form.settings?.allow_unverified_guest_response);
   const [identityVerified, setIdentityVerified] = useState(!requiresStudentVerification);
+  const [identityUnverified, setIdentityUnverified] = useState(false);
   const [identityLoading, setIdentityLoading] = useState(false);
   const [identityError, setIdentityError] = useState<string | null>(null);
-  const formLocked = requiresStudentVerification && !identityVerified;
+  const [identityFallbackAvailable, setIdentityFallbackAvailable] = useState(false);
+  const formLocked = requiresStudentVerification && !identityVerified && !identityUnverified;
   const visibleFields = useMemo(
     () => form.fields.filter((field) => visible(field, formState.data.answers)),
     [form.fields, formState.data.answers],
@@ -107,15 +113,25 @@ export default function PublicFormShow({
   function setIdentity(key: "respondent_identifier" | "respondent_email", value: string): void {
     formState.setData(key, value);
     setIdentityError(null);
+    setIdentityFallbackAvailable(false);
 
     if (identityVerified) {
       setIdentityVerified(false);
+      formState.setData("answers", {});
+    }
+
+    if (identityUnverified) {
+      setIdentityUnverified(false);
+      formState.setData("respondent_identity_unverified", false);
       formState.setData("answers", {});
     }
   }
 
   async function verifyStudent(): Promise<void> {
     setIdentityError(null);
+    setIdentityFallbackAvailable(false);
+    setIdentityUnverified(false);
+    formState.setData("respondent_identity_unverified", false);
     setIdentityLoading(true);
 
     try {
@@ -131,14 +147,26 @@ export default function PublicFormShow({
       setIdentityVerified(response.data.matched === true);
     } catch (error) {
       setIdentityVerified(false);
+      setIdentityUnverified(false);
+      formState.setData("respondent_identity_unverified", false);
       formState.setData("answers", {});
       const responseErrors = axios.isAxiosError<{ errors?: Record<string, string[]> }>(error)
         ? error.response?.data?.errors
         : undefined;
+      setIdentityFallbackAvailable(axios.isAxiosError(error) && error.response?.status === 422);
       setIdentityError(responseErrors?.respondent_identifier?.[0] ?? "We could not verify those details. Please check your Student ID and registered email.");
     } finally {
       setIdentityLoading(false);
     }
+  }
+
+  function continueWithoutLookup(): void {
+    setIdentityError(null);
+    setIdentityFallbackAvailable(false);
+    setIdentityVerified(false);
+    setIdentityUnverified(true);
+    formState.setData("respondent_identity_unverified", true);
+    formState.setData("answers", {});
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>): void {
@@ -228,6 +256,25 @@ export default function PublicFormShow({
                       {identityVerified && <span className="text-xs text-emerald-600">Student record verified. You can now review the prefilled fields.</span>}
                     </div>
                     {identityError && <p className="text-destructive text-xs" role="alert">{identityError}</p>}
+                    {identityError && identityFallbackAvailable && allowUnverifiedGuestResponse && !identityUnverified && (
+                      <div className="border-amber-500/30 bg-amber-500/5 rounded-lg border p-4">
+                        <p className="text-sm font-medium">Could not find a matching student record</p>
+                        <p className="text-muted-foreground mt-1 text-xs leading-5">
+                          You can still complete this form. It will be saved for school staff to review manually and will not update a student record automatically.
+                        </p>
+                        <Button type="button" variant="outline" className="mt-3" onClick={continueWithoutLookup}>
+                          Continue for manual review
+                        </Button>
+                      </div>
+                    )}
+                    {identityUnverified && (
+                      <div className="border-amber-500/30 bg-amber-500/5 rounded-lg border p-4">
+                        <p className="text-sm font-medium">Manual review selected</p>
+                        <p className="text-muted-foreground mt-1 text-xs leading-5">
+                          Complete the form and submit it. Staff will verify and process your details manually; no student record will be updated automatically.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="respondent-identity">
@@ -321,7 +368,7 @@ export default function PublicFormShow({
             <div className="border-border/70 bg-card flex flex-col gap-4 rounded-xl border p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
               <p className="text-muted-foreground text-xs">
                 <Check className="mr-1 inline size-3.5" />
-                {preview ? "Preview only. Responses cannot be submitted here." : "Responses are encrypted and protected."}
+                {preview ? "Preview only. Responses cannot be submitted here." : identityUnverified ? "Saved securely for manual review." : "Responses are encrypted and protected."}
               </p>
               <Button type="submit" size="lg" disabled={formState.processing || preview || formLocked}>
                 {preview ? "Preview only" : formState.processing ? "Submitting…" : "Submit response"}

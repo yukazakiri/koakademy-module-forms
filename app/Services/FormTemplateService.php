@@ -148,6 +148,7 @@ final class FormTemplateService
                 'mapping_mode' => 'auto_fill_empty',
                 'invitation_expiry_days' => 30,
                 'allow_resubmit' => false,
+                'allow_unverified_guest_response' => true,
                 'missing_only' => true,
                 'confirmation_message' => 'Your profile information has been received and the missing fields were updated.',
             ],

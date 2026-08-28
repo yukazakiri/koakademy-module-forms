@@ -46,6 +46,12 @@ function value(value: unknown): string {
     : String(value);
 }
 
+function needsManualReview(response: Props["responses"][number]): boolean {
+  return response.links.some(
+    (link) => link.status === "unmatched" || link.model_id === null,
+  );
+}
+
 export default function FormsResponses({ user, form, responses }: Props) {
   function apply(responseId: string, overwrite: boolean): void {
     router.post(
@@ -91,11 +97,14 @@ export default function FormsResponses({ user, form, responses }: Props) {
           </Card>
         ) : (
           <div className="flex flex-col gap-4">
-            {responses.map((response) => (
-              <Card
-                key={response.id}
-                className="border-border/70 overflow-hidden"
-              >
+            {responses.map((response) => {
+              const manualReview = needsManualReview(response);
+
+              return (
+                <Card
+                  key={response.id}
+                  className="border-border/70 overflow-hidden"
+                >
                 <CardHeader className="bg-muted/20 flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -121,10 +130,14 @@ export default function FormsResponses({ user, form, responses }: Props) {
                   </div>
                   <Badge
                     variant={
-                      response.status === "applied" ? "default" : "outline"
+                      response.status === "applied"
+                        ? "default"
+                        : manualReview
+                          ? "destructive"
+                          : "outline"
                     }
                   >
-                    {response.status}
+                    {manualReview ? "manual review" : response.status}
                   </Badge>
                 </CardHeader>
                 <CardContent className="space-y-5 p-5">
@@ -158,10 +171,15 @@ export default function FormsResponses({ user, form, responses }: Props) {
                             {link.model_key}: {link.model_id ?? link.status}
                           </span>
                         ))}
-                      </div>
+                    </div>
+                      {manualReview && (
+                        <p className="mt-3 text-xs text-amber-700">
+                          No matching student record was found. Review the submitted Student ID and email manually before updating any record.
+                        </p>
+                      )}
                     </div>
                   )}
-                  {response.status !== "applied" && (
+                  {response.status !== "applied" && !manualReview && (
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         variant="outline"
@@ -179,8 +197,9 @@ export default function FormsResponses({ user, form, responses }: Props) {
                     </div>
                   )}
                 </CardContent>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
