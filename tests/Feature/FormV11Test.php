@@ -92,6 +92,56 @@ it('generates the built-in student template from approved host fields', function
         ->and($definition['fields'][0]['presentation']['control'])->toBe('combobox');
 });
 
+it('hydrates built-in profile help text for the editor when old forms have empty values', function (): void {
+    $form = Form::factory()->create([
+        'settings' => ['template_key' => 'student_profile_completion'],
+    ]);
+    $form->fields()->create([
+        'field_key' => 'birthplace',
+        'label' => 'Birthplace',
+        'type' => 'text',
+        'description' => null,
+        'presentation' => [],
+        'position' => 1,
+    ]);
+
+    $defaults = app(FormTemplateService::class)->studentProfileFieldDefaults('birthplace', 'text');
+
+    expect($defaults['description'])->toContain('city or municipality')
+        ->and($defaults['placeholder'])->toBe('e.g. Quezon City, Metro Manila');
+});
+
+it('shows fallback profile help text in the edit payload for existing forms', function (): void {
+    $form = Form::factory()->create([
+        'settings' => ['template_key' => 'student_profile_completion'],
+    ]);
+    $form->fields()->create([
+        'field_key' => 'birthplace',
+        'label' => 'Birthplace',
+        'type' => 'text',
+        'description' => null,
+        'presentation' => [],
+        'position' => 1,
+    ]);
+
+    $request = Request::create(route('administrators.forms.edit', ['form' => $form]), 'GET');
+    $request->headers->set('X-Inertia', 'true');
+    $request->setUserResolver(fn (): object => (object) [
+        'id' => 7,
+        'name' => 'Administrator',
+        'email' => 'admin@example.test',
+        'is_super_admin' => true,
+    ]);
+
+    $httpResponse = app(FormAdminController::class)->edit($request, $form)->toResponse($request);
+    $payload = json_decode($httpResponse->getContent(), true, flags: JSON_THROW_ON_ERROR);
+    $field = $payload['props']['form']['fields'][0];
+
+    expect($httpResponse->getStatusCode())->toBe(200)
+        ->and($field['description'])->toContain('city or municipality')
+        ->and($field['presentation']['placeholder'])->toBe('e.g. Quezon City, Metro Manila');
+});
+
 it('caches approved mapping paths while creating a form', function (): void {
     $registry = Mockery::mock(FormsModelRegistry::class);
     $registry->shouldReceive('fields')->once()->with('student')->andReturn([

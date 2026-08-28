@@ -60,6 +60,9 @@ applies only values that are still blank while the target record is locked.
 The published student view includes section guidance, completion progress,
 friendly placeholders, and short explanations for profile questions. Social
 media fields are intentionally excluded from this built-in template.
+Administrators can customize the help text and placeholder for each question
+from the editor; existing profile forms receive the built-in guidance as an
+editable starting point.
 
 Existing normalized student and relation columns are used when available.
 Sparse or evolving fields are stored under stable keys in the host's
@@ -169,6 +172,12 @@ information update form:
 4. Choose the matching approved field path shown by the builder. Do not type
    arbitrary model paths.
 5. Publish the form and share it with the intended respondents.
+
+The editor uses a Questions and Settings workspace. For select, radio, and
+checkbox questions, use **Add or search for a choice** to type choices into a
+creatable combobox, then edit their labels inline. Choose **Searchable
+combobox** under **Display and behavior** when respondents should be able to
+search a long list of choices.
 
 Authenticated responses are linked to the user's student record. Guest
 responses use the configured email or verified Student ID + registered email

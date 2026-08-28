@@ -203,6 +203,15 @@ final class FormTemplateService
             ->value('id');
     }
 
+    /** @return array{description: string, placeholder: string} */
+    public function studentProfileFieldDefaults(string $key, string $type): array
+    {
+        return [
+            'description' => self::PROFILE_DESCRIPTIONS[$key] ?? 'Enter the information as it should appear in your school record.',
+            'placeholder' => self::PROFILE_PLACEHOLDERS[$key] ?? $this->defaultProfilePlaceholder($key, $type),
+        ];
+    }
+
     public function createFromForm(Form $form, string $name, mixed $actor): FormTemplate
     {
         $definition = [
@@ -313,12 +322,13 @@ final class FormTemplateService
             $type === 'select' => 'select',
             default => 'input',
         };
+        $defaults = $this->studentProfileFieldDefaults($key, $type);
 
         $fieldData = [
             'field_key' => $key,
             'label' => (string) ($field['label'] ?? Str::headline($key)),
             'type' => $type,
-            'description' => self::PROFILE_DESCRIPTIONS[$key] ?? 'Enter the information as it should appear in your school record.',
+            'description' => $defaults['description'],
             'section' => (string) ($field['group'] ?? 'Profile'),
             'required' => $this->isRequiredProfileField($key),
             'options' => $options,
@@ -328,7 +338,7 @@ final class FormTemplateService
                 'input_mode' => $type === 'phone' ? 'tel' : ($type === 'number' || $type === 'year' ? 'numeric' : 'text'),
                 'suggestion_source' => $recordSuggestions ? 'record_values' : 'none',
                 'suggestion_limit' => 10,
-                'placeholder' => self::PROFILE_PLACEHOLDERS[$key] ?? $this->defaultProfilePlaceholder($key, $type),
+                'placeholder' => $defaults['placeholder'],
                 'unit' => match ($key) {
                     'height' => 'cm',
                     'weight' => 'kg',

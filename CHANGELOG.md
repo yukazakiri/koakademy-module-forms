@@ -2,6 +2,17 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.2.1 - 2026-08-28
+
+- Hydrated built-in profile help text and placeholders in the edit payload so
+  existing forms can customize the guidance shown to students.
+- Revamped the form editor with a Questions/Settings workflow and shadcn
+  controls for answer types, access settings, mappings, toggles, and layout.
+- Added a creatable answer-choice combobox for dropdown, single-choice, and
+  multiple-choice questions.
+- Rendered choice questions with a searchable combobox when that presentation
+  is selected.
+
 ## 1.2.0 - 2026-08-28
 
 - Fixed the form builder save request so edited forms persist correctly.

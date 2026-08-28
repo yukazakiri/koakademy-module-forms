@@ -217,25 +217,39 @@ final class FormAdminController
             'closes_at' => $form->closes_at?->toIso8601String(),
             'responses_count' => $form->responses_count ?? $form->responses()->count(),
             'fields' => $form->relationLoaded('fields')
-                ? $form->fields->map(function ($field): array {
-                    return [
-                        'field_key' => $field->field_key,
-                        'label' => $field->label,
-                        'type' => $field->type,
-                        'description' => $field->description,
-                        'section' => $field->section,
-                        'required' => $field->required,
-                        'options' => $field->options ?? [],
-                        'validation' => $field->validation ?? [],
-                        'visibility' => $field->visibility,
-                        'presentation' => $field->presentation ?? [],
-                        'behavior' => $field->behavior ?? [],
-                        'mapping' => $field->mapping,
-                        'is_sensitive' => $field->is_sensitive,
-                    ];
-                })->values()->all()
+                ? $form->fields->map(fn ($field): array => $this->formFieldPayload($form, $field))->values()->all()
                 : [],
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function formFieldPayload(Form $form, mixed $field): array
+    {
+        $presentation = is_array($field->presentation) ? $field->presentation : [];
+        $payload = [
+            'field_key' => $field->field_key,
+            'label' => $field->label,
+            'type' => $field->type,
+            'description' => $field->description,
+            'section' => $field->section,
+            'required' => $field->required,
+            'options' => $field->options ?? [],
+            'validation' => $field->validation ?? [],
+            'visibility' => $field->visibility,
+            'presentation' => $presentation,
+            'behavior' => $field->behavior ?? [],
+            'mapping' => $field->mapping,
+            'is_sensitive' => $field->is_sensitive,
+        ];
+
+        if (data_get($form->settings, 'template_key') === 'student_profile_completion') {
+            $defaults = $this->templates->studentProfileFieldDefaults($field->field_key, $field->type);
+            $payload['description'] ??= $defaults['description'];
+            $presentation['placeholder'] ??= $defaults['placeholder'];
+            $payload['presentation'] = $presentation;
+        }
+
+        return $payload;
     }
 
     /** @return array<string, mixed> */
