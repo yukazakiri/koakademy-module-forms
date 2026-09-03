@@ -309,7 +309,11 @@ final class FormTemplateService
                     ? 'phone'
                     : 'text',
             };
-        $options = $field['options'] ?? [];
+        $options = $this->optionsForProfileField($key, is_array($field['options'] ?? null) ? $field['options'] : []);
+        if ($this->isIncomeProfileField($key) && $options !== []) {
+            $type = 'select';
+        }
+
         $recordSuggestions = in_array($key, [
             'birthplace',
             'region_of_origin',
@@ -320,6 +324,7 @@ final class FormTemplateService
             'civil_status',
         ], true);
         $control = match (true) {
+            $this->isIncomeProfileField($key) && $options !== [] => 'select',
             $recordSuggestions => 'combobox',
             $type === 'yes_no' || ($type === 'select' && count($options) <= 4) => 'radio_cards',
             $type === 'select' => 'select',
@@ -385,6 +390,62 @@ final class FormTemplateService
             'phone' => 'e.g. 0912 345 6789',
             default => 'Enter '.Str::headline($key),
         };
+    }
+
+    private function optionsForProfileField(string $key, array $options): array
+    {
+        if (! $this->isIncomeProfileField($key)) {
+            return $options;
+        }
+
+        return $this->incomeBracketOptions() ?: $options;
+    }
+
+    private function incomeBracketOptions(): array
+    {
+        $mode = (string) config('income_brackets.default_mode', '');
+        $brackets = config('income_brackets.modes.'.$mode.'.brackets', []);
+        if (! is_array($brackets)) {
+            return [];
+        }
+
+        $symbol = $this->currencySymbol();
+
+        return collect($brackets)
+            ->mapWithKeys(fn (mixed $bracket, string $key): array => [
+                $key => str_replace('{symbol}', $symbol, (string) data_get($bracket, 'label', '')),
+            ])
+            ->filter(fn (string $label): bool => $label !== '')
+            ->all();
+    }
+
+    private function currencySymbol(): string
+    {
+        if (class_exists('App\\Settings\\SiteSettings')) {
+            $currency = app('App\\Settings\\SiteSettings')->getCurrency();
+            if ($currency instanceof \BackedEnum) {
+                $currency = $currency->value;
+            } elseif ($currency instanceof \UnitEnum) {
+                $currency = $currency->name;
+            }
+
+            return match ((string) $currency) {
+                'PHP' => '₱',
+                'USD' => '$',
+                default => (string) $currency,
+            };
+        }
+
+        return '₱';
+    }
+
+    private function isIncomeProfileField(string $key): bool
+    {
+        return in_array($key, [
+            'family_income_bracket',
+            'father_income_bracket',
+            'mother_income_bracket',
+        ], true);
     }
 
     private function isRequiredProfileField(string $key): bool

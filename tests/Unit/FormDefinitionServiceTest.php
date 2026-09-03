@@ -78,3 +78,27 @@ it('keeps sectioned fields in their saved order for page-based clients', functio
     expect(array_column($fields, 'key'))->toBe(['first_name', 'email', 'phone'])
         ->and(array_column($fields, 'section'))->toBe(['Identity', 'Contact', 'Contact']);
 });
+
+it('rejects invalid select option values', function (): void {
+    $form = Form::factory()->create(['status' => FormStatus::Published]);
+    $form->fields()->create([
+        'field_key' => 'family_income_bracket',
+        'label' => 'Family income bracket',
+        'type' => 'select',
+        'required' => true,
+        'position' => 1,
+        'options' => [
+            'below_250k' => '₱250,000 and below',
+            'above_8m' => 'Above ₱8,000,000',
+        ],
+        'presentation' => ['control' => 'select'],
+    ]);
+    $form->load('fields');
+
+    $validator = Validator::make([
+        'answers' => ['family_income_bracket' => 'not_configured'],
+    ], app(FormDefinitionService::class)->validationRules($form));
+
+    expect($validator->fails())->toBeTrue()
+        ->and($validator->errors()->has('answers.family_income_bracket'))->toBeTrue();
+});

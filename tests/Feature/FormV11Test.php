@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Modules\Forms\Contracts\FormsInvitationTargetProvider;
@@ -117,6 +118,161 @@ it('uses smart field types for built-in student profile fields', function (): vo
     expect($fields[0]['type'])->toBe('date')
         ->and($fields[0]['validation'])->toBe(['before_or_equal' => 'today'])
         ->and($fields[1]['type'])->toBe('textarea');
+});
+
+it('generates income bracket fields as selects from configured brackets', function (): void {
+    config()->set('income_brackets', [
+        'default_mode' => 'annual',
+        'modes' => [
+            'annual' => [
+                'brackets' => [
+                    'below_250k' => ['label' => '{symbol}250,000 and below'],
+                    '250001_to_400k' => ['label' => '{symbol}250,001 - {symbol}400,000'],
+                ],
+            ],
+        ],
+    ]);
+
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->with('student')->andReturn([
+        [
+            'key' => 'family_income_bracket',
+            'label' => 'Family income bracket',
+            'type' => 'string',
+            'group' => 'Family',
+            'write_paths' => ['details.family_income_bracket'],
+        ],
+        [
+            'key' => 'father_income_bracket',
+            'label' => 'Father income bracket',
+            'type' => 'string',
+            'group' => 'Family',
+            'write_paths' => ['details.father_income_bracket'],
+        ],
+        [
+            'key' => 'mother_income_bracket',
+            'label' => 'Mother income bracket',
+            'type' => 'string',
+            'group' => 'Family',
+            'write_paths' => ['details.mother_income_bracket'],
+        ],
+    ]);
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $definition = app(FormTemplateService::class)->definition('student_profile_completion');
+
+    expect(collect($definition['fields'])->pluck('type', 'field_key')->all())->toBe([
+        'family_income_bracket' => 'select',
+        'father_income_bracket' => 'select',
+        'mother_income_bracket' => 'select',
+    ])->and(collect($definition['fields'])->pluck('options', 'field_key')->all())->each->toBe([
+        'below_250k' => '₱250,000 and below',
+        '250001_to_400k' => '₱250,001 - ₱400,000',
+    ])->and(collect($definition['fields'])->pluck('presentation.control', 'field_key')->all())->toBe([
+        'family_income_bracket' => 'select',
+        'father_income_bracket' => 'select',
+        'mother_income_bracket' => 'select',
+    ])->and($definition['fields'][0]['mapping'])->toBe(['model' => 'student', 'path' => 'details.family_income_bracket']);
+});
+
+it('keeps provided income options when bracket config is unavailable', function (): void {
+    config()->set('income_brackets', []);
+
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->with('student')->andReturn([
+        [
+            'key' => 'family_income_bracket',
+            'label' => 'Family income bracket',
+            'type' => 'string',
+            'options' => ['existing_key' => 'Existing bracket'],
+            'write_paths' => ['details.family_income_bracket'],
+        ],
+    ]);
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $definition = app(FormTemplateService::class)->definition('student_profile_completion');
+
+    expect($definition['fields'][0]['type'])->toBe('select')
+        ->and($definition['fields'][0]['options'])->toBe(['existing_key' => 'Existing bracket'])
+        ->and($definition['fields'][0]['presentation']['control'])->toBe('select');
+});
+
+it('upgrades saved student profile income bracket field definitions only', function (): void {
+    config()->set('income_brackets', [
+        'default_mode' => 'annual',
+        'modes' => [
+            'annual' => [
+                'brackets' => [
+                    'below_250k' => ['label' => '{symbol}250,000 and below'],
+                    'above_8m' => ['label' => 'Above {symbol}8,000,000'],
+                ],
+            ],
+        ],
+    ]);
+
+    $form = Form::factory()->create(['settings' => ['template_key' => 'student_profile_completion']]);
+    $otherForm = Form::factory()->create(['settings' => ['template_key' => 'custom']]);
+    $form->fields()->createMany([
+        ['field_key' => 'family_income_bracket', 'label' => 'Family income bracket', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'input'], 'mapping' => ['model' => 'student', 'path' => 'details.family_income_bracket'], 'position' => 1],
+        ['field_key' => 'father_income_bracket', 'label' => 'Father income bracket', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'input'], 'mapping' => ['model' => 'student', 'path' => 'details.father_income_bracket'], 'position' => 2],
+        ['field_key' => 'mother_income_bracket', 'label' => 'Mother income bracket', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'input'], 'mapping' => ['model' => 'student', 'path' => 'details.mother_income_bracket'], 'position' => 3],
+        ['field_key' => 'first_name', 'label' => 'First name', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'input'], 'position' => 4],
+    ]);
+    $otherForm->fields()->create([
+        'field_key' => 'family_income_bracket',
+        'label' => 'Family income bracket',
+        'type' => 'text',
+        'options' => [],
+        'presentation' => ['control' => 'input'],
+        'position' => 1,
+    ]);
+    $response = FormResponse::query()->create([
+        'form_id' => $form->getKey(),
+        'status' => FormResponseStatus::Submitted,
+        'latest_revision' => 1,
+    ]);
+    $revision = $response->revisions()->create([
+        'revision' => 1,
+        'answer_payload' => app(FormAnswerService::class)->encrypt(['family_income_bracket' => 'below_250k']),
+        'field_snapshot' => '[]',
+        'created_at' => now(),
+    ]);
+    $answerPayload = $revision->answer_payload;
+
+    $migration = include dirname(__DIR__, 2).'/database/migrations/2026_09_03_000000_upgrade_student_profile_income_bracket_fields.php';
+    $migration->up();
+
+    $incomeFields = $form->fields()->whereIn('field_key', [
+        'family_income_bracket',
+        'father_income_bracket',
+        'mother_income_bracket',
+    ])->get()->keyBy('field_key');
+    $unrelatedField = $form->fields()->where('field_key', 'first_name')->firstOrFail();
+    $otherIncomeField = $otherForm->fields()->where('field_key', 'family_income_bracket')->firstOrFail();
+
+    expect($incomeFields)->toHaveCount(3)
+        ->and($incomeFields->pluck('type')->all())->toBe([
+            'select',
+            'select',
+            'select',
+        ])
+        ->and($incomeFields->pluck('options')->all())->each->toBe([
+            'below_250k' => '₱250,000 and below',
+            'above_8m' => 'Above ₱8,000,000',
+        ])
+        ->and($incomeFields->pluck('presentation.control')->all())->toBe([
+            'select',
+            'select',
+            'select',
+        ])
+        ->and($incomeFields['family_income_bracket']->mapping)->toBe(['model' => 'student', 'path' => 'details.family_income_bracket'])
+        ->and($incomeFields['father_income_bracket']->mapping)->toBe(['model' => 'student', 'path' => 'details.father_income_bracket'])
+        ->and($incomeFields['mother_income_bracket']->mapping)->toBe(['model' => 'student', 'path' => 'details.mother_income_bracket'])
+        ->and($unrelatedField->type)->toBe('text')
+        ->and($otherIncomeField->type)->toBe('text')
+        ->and($revision->refresh()->answer_payload)->toBe($answerPayload)
+        ->and(app(FormAnswerService::class)->latestAnswers($response->refresh()))->toBe(['family_income_bracket' => 'below_250k'])
+        ->and(DB::table('form_response_revisions')->count())->toBe(1);
 });
 
 it('hydrates built-in profile help text for the editor when old forms have empty values', function (): void {
