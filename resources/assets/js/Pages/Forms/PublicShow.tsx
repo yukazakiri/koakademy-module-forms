@@ -9,6 +9,7 @@ import axios from "axios";
 import { Head, useForm } from "@inertiajs/react";
 import {
   Check,
+  ChevronLeft,
   ChevronRight,
   CircleHelp,
   ClipboardCheck,
@@ -17,7 +18,7 @@ import {
   Send,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 interface FormField {
   key: string;
@@ -75,6 +76,24 @@ function filled(value: unknown): boolean {
   return (
     value !== undefined && value !== null && value !== "" && value !== false
   );
+}
+
+function resolvedInputMode(
+  value: string | undefined,
+): React.HTMLAttributes<HTMLInputElement>["inputMode"] {
+  switch (value) {
+    case "none":
+    case "text":
+    case "tel":
+    case "url":
+    case "email":
+    case "numeric":
+    case "decimal":
+    case "search":
+      return value;
+    default:
+      return undefined;
+  }
 }
 
 const profileSectionDescriptions: Record<string, string> = {
@@ -223,6 +242,12 @@ export default function PublicFormShow({
     [visibleFields],
   );
 
+  useEffect(() => {
+    setCurrentPage((current) =>
+      Math.min(current, Math.max(sections.length - 1, 0)),
+    );
+  }, [sections.length]);
+
   function setAnswer(key: string, value: unknown): void {
     setPageError(null);
     formState.setData("answers", { ...formState.data.answers, [key]: value });
@@ -253,6 +278,7 @@ export default function PublicFormShow({
 
     setCurrentPage((page) => Math.min(page + 1, sections.length - 1));
     setPageError(null);
+    window.scrollTo({ top: 0 });
   }
 
   function setIdentity(
@@ -428,21 +454,47 @@ export default function PublicFormShow({
           </header>
 
           <div className="border-border/70 bg-card rounded-xl border p-4 shadow-sm sm:p-5">
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
                 <span className="font-medium">
                   {isStudentProfileForm
                     ? "Profile completion"
                     : "Your progress"}
                 </span>
-                <p className="text-muted-foreground mt-1 text-xs">
+                <h2 className="mt-1 text-lg font-semibold tracking-[-0.03em] text-balance">
+                  {activeSection}
+                </h2>
+                <p
+                  className="text-muted-foreground mt-1 text-xs"
+                  aria-live="polite"
+                >
+                  {sections.length > 1
+                    ? `Step ${activePageIndex + 1} of ${sections.length} · `
+                    : ""}
+                  {
+                    activeFields.filter((field) =>
+                      filled(formState.data.answers[field.key]),
+                    ).length
+                  }{" "}
+                  of {activeFields.length} in this section answered
+                  {activeFields.filter(
+                    (field) =>
+                      field.required &&
+                      !filled(formState.data.answers[field.key]),
+                  ).length > 0
+                    ? ` · ${activeFields.filter((field) => field.required && !filled(formState.data.answers[field.key])).length} required remaining`
+                    : ""}
+                </p>
+              </div>
+              <div className="shrink-0 text-left sm:text-right">
+                <span className="text-primary text-2xl font-semibold tabular-nums">
+                  {completion}%
+                </span>
+                <p className="text-muted-foreground text-xs">
                   {completedCount} of {visibleFields.length}{" "}
                   {isStudentProfileForm ? "fields" : "questions"} answered
                 </p>
               </div>
-              <span className="text-primary text-lg font-semibold">
-                {completion}%
-              </span>
             </div>
             <Progress
               value={completion}
@@ -450,29 +502,74 @@ export default function PublicFormShow({
               aria-label={`Form completion ${completion}%`}
             />
             {sections.length > 1 && (
-              <div
-                className="mt-4 flex items-center gap-2"
-                aria-label="Form pages"
-              >
-                {sections.map(([section], index) => (
-                  <div
-                    key={section}
-                    className="flex min-w-0 flex-1 items-center gap-2"
-                    aria-current={
-                      index === activePageIndex ? "step" : undefined
-                    }
+              <nav aria-label="Form sections" className="mt-4">
+                <div className="-mx-2 overflow-x-auto px-2 pb-1">
+                  <ol
+                    className="flex min-w-max gap-2 sm:min-w-0 sm:flex-wrap"
+                    role="list"
                   >
-                    <span
-                      className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${index === activePageIndex ? "bg-primary text-primary-foreground" : index < activePageIndex ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}
-                    >
-                      {index + 1}
-                    </span>
-                    <span className="text-muted-foreground hidden truncate text-xs sm:block">
-                      {section}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                    {sections.map(([section, fields], index) => {
+                      const sectionAnswered = fields.filter((field) =>
+                        filled(formState.data.answers[field.key]),
+                      ).length;
+                      const completed = index < activePageIndex;
+                      const current = index === activePageIndex;
+                      const upcoming = index > activePageIndex;
+                      const stateLabel = completed
+                        ? "Completed"
+                        : current
+                          ? "Current"
+                          : "Upcoming";
+                      const stepClass = completed
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : current
+                          ? "border-primary bg-background text-foreground shadow-sm ring-1 ring-primary/20"
+                          : "border-border/70 bg-muted/30 text-muted-foreground";
+
+                      return (
+                        <li
+                          key={section}
+                          className="shrink-0 sm:min-w-44 sm:flex-1"
+                        >
+                          <button
+                            type="button"
+                            className={`flex min-h-11 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${stepClass}`}
+                            aria-current={current ? "step" : undefined}
+                            aria-label={`${stateLabel} step ${index + 1}, ${section}, ${sectionAnswered} of ${fields.length} answered`}
+                            onClick={() => {
+                              if (!upcoming) {
+                                setCurrentPage(index);
+                                setPageError(null);
+                              }
+                            }}
+                            disabled={upcoming}
+                          >
+                            <span className="bg-card flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold shadow-sm">
+                              {completed ? (
+                                <Check
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                index + 1
+                              )}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium">
+                                {section}
+                              </span>
+                              <span className="text-muted-foreground hidden text-xs sm:block">
+                                {stateLabel} · {sectionAnswered}/{fields.length}{" "}
+                                answered
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              </nav>
             )}
           </div>
 
@@ -807,10 +904,9 @@ export default function PublicFormShow({
                                 <Input
                                   id={`answer-${field.key}`}
                                   type={inputType}
-                                  inputMode={
-                                    field.presentation
-                                      ?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]
-                                  }
+                                  inputMode={resolvedInputMode(
+                                    field.presentation?.input_mode,
+                                  )}
                                   list={listId}
                                   value={String(value ?? "")}
                                   onChange={(event) =>
@@ -837,10 +933,9 @@ export default function PublicFormShow({
                                 <Input
                                   id={`answer-${field.key}`}
                                   type={inputType}
-                                  inputMode={
-                                    field.presentation
-                                      ?.input_mode as React.HTMLAttributes<HTMLInputElement>["inputMode"]
-                                  }
+                                  inputMode={resolvedInputMode(
+                                    field.presentation?.input_mode,
+                                  )}
                                   value={String(value ?? "")}
                                   onChange={(event) =>
                                     setAnswer(field.key, event.target.value)
@@ -918,7 +1013,7 @@ export default function PublicFormShow({
                     }}
                     disabled={formState.processing}
                   >
-                    Back
+                    <ChevronLeft className="size-4 mr-1" /> Back
                   </Button>
                 )}
                 {isLastPage ? (
