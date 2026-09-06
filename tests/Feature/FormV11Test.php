@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Validator;
 use Modules\Forms\Contracts\FormsInvitationTargetProvider;
 use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Enums\FormAccessMode;
@@ -20,12 +21,113 @@ use Modules\Forms\Models\FormInvitation;
 use Modules\Forms\Models\FormResponse;
 use Modules\Forms\Models\FormTemplate;
 use Modules\Forms\Services\FormAnswerService;
+use Modules\Forms\Services\FormDefinitionService;
 use Modules\Forms\Services\FormInvitationService;
 use Modules\Forms\Services\FormLifecycleService;
 use Modules\Forms\Services\FormMappingService;
 use Modules\Forms\Services\FormResponseService;
 use Modules\Forms\Services\FormTemplateService;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+function reportingProfileDefinition(): array
+{
+    config()->set('income_brackets', [
+        'default_mode' => 'annual',
+        'modes' => ['annual' => ['label' => 'Annual Income', 'brackets' => [
+            'below_250k' => ['label' => '{symbol}250,000 and below'],
+            '250001_to_400k' => ['label' => '{symbol}250,001 - {symbol}400,000'],
+        ]]],
+    ]);
+    $keys = ['father_name', 'father_occupation', 'father_contact', 'father_email', 'mother_name', 'mother_occupation', 'mother_contact', 'mother_email', 'guardian_name', 'guardian_relationship', 'guardian_contact', 'guardian_email', 'family_address', 'family_income_bracket', 'father_income_bracket', 'mother_income_bracket', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_address', 'emergency_contact_relationship', 'is_solo_parent_dependent'];
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->with('student')->andReturn(array_map(fn (string $key): array => [
+        'key' => $key,
+        'label' => $key,
+        'type' => $key === 'is_solo_parent_dependent' ? 'boolean' : (str_ends_with($key, '_email') ? 'email' : 'string'),
+        'write_paths' => ['student.'.$key],
+    ], $keys));
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    return app(FormTemplateService::class)->definition('student_profile_completion');
+}
+
+it('accepts a student profile with emergency contacts and no parent guardian or income details', function (): void {
+    $definition = reportingProfileDefinition();
+    $form = Form::factory()->create();
+    foreach ($definition['fields'] as $position => $field) {
+        $form->fields()->create([...$field, 'position' => $position]);
+    }
+    $answers = [
+        'emergency_contact_name' => 'Emergency Contact',
+        'emergency_contact_phone' => '09123456789',
+        'emergency_contact_address' => 'Example City',
+        'emergency_contact_relationship' => 'Sibling',
+        'is_solo_parent_dependent' => 'no',
+    ];
+    $rules = app(FormDefinitionService::class)->validationRules($form->load('fields'));
+    expect(Validator::make(['answers' => $answers], $rules)->passes())->toBeTrue();
+    unset($answers['emergency_contact_phone']);
+    expect(Validator::make(['answers' => $answers], $rules)->errors()->has('answers.emergency_contact_phone'))->toBeTrue();
+});
+
+it('keeps only the selected shared or separate income answers', function (array $answers, array $expected): void {
+    $definition = reportingProfileDefinition();
+    $form = Form::factory()->create();
+    foreach ($definition['fields'] as $position => $field) {
+        if (str_ends_with($field['field_key'], '_income_bracket')) {
+            $form->fields()->create([...$field, 'position' => $position]);
+        }
+    }
+    $service = app(FormDefinitionService::class);
+    $form->load('fields');
+    expect(Validator::make(['answers' => $answers], $service->validationRules($form, answers: $answers))->passes())->toBeTrue()
+        ->and($service->normalizeAnswers($form, $answers))->toBe($expected);
+    $response = app(FormResponseService::class)->submit($form, ['answers' => $answers]);
+    expect(app(FormAnswerService::class)->latestAnswers($response))->toBe($expected);
+})->with([
+    'shared' => [['family_income_bracket' => 'below_250k', 'father_income_bracket' => '250001_to_400k'], ['family_income_bracket' => 'below_250k']],
+    'shared hides legacy parent text' => [['family_income_bracket' => 'below_250k', 'father_income_bracket' => 'legacy text'], ['family_income_bracket' => 'below_250k']],
+    'separate' => [['father_income_bracket' => 'below_250k', 'mother_income_bracket' => '250001_to_400k'], ['father_income_bracket' => 'below_250k', 'mother_income_bracket' => '250001_to_400k']],
+    'unanswered' => [[], []],
+]);
+
+it('rejects arbitrary income text in the student template', function (): void {
+    $definition = reportingProfileDefinition();
+    $field = collect($definition['fields'])->firstWhere('field_key', 'family_income_bracket');
+    $form = Form::factory()->create();
+    $form->fields()->create([...$field, 'position' => 1]);
+    $validator = Validator::make(['answers' => ['family_income_bracket' => 'some income']], app(FormDefinitionService::class)->validationRules($form->load('fields')));
+    expect($validator->errors()->has('answers.family_income_bracket'))->toBeTrue();
+});
+
+it('upgrades existing profile forms and saved templates without changing responses or unrelated forms', function (): void {
+    reportingProfileDefinition();
+    $form = Form::factory()->create(['settings' => ['template_key' => 'student_profile_completion']]);
+    $fields = [
+        ['field_key' => 'guardian_name', 'label' => 'Custom guardian label', 'type' => 'text', 'required' => true, 'position' => 1],
+        ['field_key' => 'family_income_bracket', 'label' => 'Family income', 'type' => 'text', 'position' => 2, 'presentation' => ['unit' => 'custom'], 'mapping' => ['model' => 'student', 'path' => 'student.family_income_bracket']],
+    ];
+    $form->fields()->createMany($fields);
+    $other = Form::factory()->create();
+    $other->fields()->createMany($fields);
+    $template = FormTemplate::query()->create(['name' => 'Saved profile', 'model_key' => 'student', 'definition' => ['settings' => $form->settings, 'fields' => $fields]]);
+    $response = app(FormResponseService::class)->submit($form, ['answers' => ['family_income_bracket' => 'legacy text']]);
+    $migration = include dirname(__DIR__, 2).'/database/migrations/2026_09_06_145634_update_student_profile_form_reporting_fields.php';
+    $migration->up();
+    $migration->up();
+    $updated = $form->fresh('fields')->fields->keyBy('field_key');
+    expect($updated['guardian_name']->required)->toBeFalse()
+        ->and($updated['guardian_name']->label)->toBe('Custom guardian label')
+        ->and($updated['family_income_bracket']->type)->toBe('select')
+        ->and($updated['family_income_bracket']->presentation['unit'])->toBe('custom')
+        ->and($updated['family_income_bracket']->mapping['path'])->toBe('student.family_income_bracket')
+        ->and($updated->has('is_solo_parent_dependent'))->toBeTrue()
+        ->and($updated)->toHaveCount(3)
+        ->and($other->fields()->where('field_key', 'guardian_name')->first()->required)->toBeTrue()
+        ->and($other->fields()->where('field_key', 'family_income_bracket')->first()->type)->toBe('text')
+        ->and(collect($template->fresh()->definition['fields'])->firstWhere('field_key', 'guardian_name')['required'])->toBeFalse()
+        ->and(app(FormAnswerService::class)->latestAnswers($response->fresh()))->toBe(['family_income_bracket' => 'legacy text']);
+});
 
 it('renders invitation forms through the authenticated admin preview route', function (): void {
     $form = Form::factory()->create([

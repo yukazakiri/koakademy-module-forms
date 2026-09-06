@@ -2,10 +2,35 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
 use Modules\Forms\Enums\FormStatus;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Services\FormDefinitionService;
+use Modules\Forms\Services\KoAkademyFormsModelRegistry;
+
+it('maps yes and no answers to booleans and records shared or separate income semantics', function (): void {
+    $record = new class extends Model
+    {
+        protected function casts(): array
+        {
+            return ['is_solo_parent_dependent' => 'boolean', 'use_same_parent_income' => 'boolean'];
+        }
+    };
+    $registry = new KoAkademyFormsModelRegistry;
+    $registry->write($record, 'student.is_solo_parent_dependent', 'no');
+    expect($record->is_solo_parent_dependent)->toBeFalse();
+    $registry->write($record, 'student.is_solo_parent_dependent', 'yes');
+    expect($record->is_solo_parent_dependent)->toBeTrue();
+    config()->set('income_brackets.default_mode', 'annual');
+    $registry->write($record, 'student.family_income_bracket', 'below_250k');
+    expect($record->income_bracket_mode)->toBe('annual')
+        ->and($record->use_same_parent_income)->toBeTrue();
+    $registry->write($record, 'student.father_income_bracket', 'below_250k');
+    expect($record->use_same_parent_income)->toBeFalse();
+    $registry->write($record, 'student.family_income_bracket', null);
+    expect($record->use_same_parent_income)->toBeFalse();
+});
 
 it('provides safe defaults for yes or no fields and strips hidden answers', function (): void {
     $form = Form::factory()->create(['status' => FormStatus::Published]);

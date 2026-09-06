@@ -95,8 +95,9 @@ final class FormDefinitionService
         return $answers;
     }
 
-    /** @return array<string, array<int, mixed>> */
-    public function validationRules(Form $form, ?object $record = null): array
+    /** @param array<string, mixed> $answers
+     *  @return array<string, array<int, mixed>> */
+    public function validationRules(Form $form, ?object $record = null, array $answers = []): array
     {
         $rules = ['answers' => ['array']];
 
@@ -105,6 +106,11 @@ final class FormDefinitionService
                 continue;
             }
             $key = 'answers.'.$field->field_key;
+            if (data_get($field->visibility, 'operator') === 'is_empty' && ! $this->isVisible($field, $answers)) {
+                $rules[$key] = ['exclude'];
+
+                continue;
+            }
             $fieldRules = [$field->required ? 'required' : 'nullable'];
 
             $fieldRules = [...$fieldRules, ...$this->typeRules($field)];
@@ -199,6 +205,7 @@ final class FormDefinitionService
         $expected = $visibility['value'] ?? null;
 
         return match ($visibility['operator'] ?? 'equals') {
+            'is_empty' => $actual === null || $actual === '' || $actual === [],
             'not_equals' => $actual != $expected,
             'contains' => is_array($actual) && in_array($expected, $actual, true),
             default => $actual == $expected,

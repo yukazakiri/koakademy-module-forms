@@ -19,6 +19,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
+import { isFormFieldVisible } from "./form-visibility";
 
 interface FormField {
   key: string;
@@ -60,16 +61,6 @@ interface Props {
   preview?: boolean;
   invitation_token?: string;
   invitation?: { expires_at: string | null; student_name: string | null };
-}
-
-function visible(field: FormField, answers: Record<string, unknown>): boolean {
-  if (!field.visibility?.field) return true;
-  const actual = answers[field.visibility.field];
-  const expected = field.visibility.value;
-  if (field.visibility.operator === "not_equals") return actual !== expected;
-  if (field.visibility.operator === "contains")
-    return Array.isArray(actual) && actual.includes(expected);
-  return actual === expected;
 }
 
 function filled(value: unknown): boolean {
@@ -206,7 +197,10 @@ export default function PublicFormShow({
   const isStudentProfileForm =
     form.settings?.template_key === "student_profile_completion";
   const visibleFields = useMemo(
-    () => form.fields.filter((field) => visible(field, formState.data.answers)),
+    () =>
+      form.fields.filter((field) =>
+        isFormFieldVisible(field, formState.data.answers),
+      ),
     [form.fields, formState.data.answers],
   );
   const sections = useMemo(() => {
@@ -890,7 +884,9 @@ export default function PublicFormShow({
                                 }
                                 required={field.required}
                               >
-                                <option value="">Choose an option</option>
+                                <option value="">
+                                  {placeholder ?? "Choose an option"}
+                                </option>
                                 {Object.entries(field.options).map(
                                   ([key, label]) => (
                                     <option key={key} value={key}>

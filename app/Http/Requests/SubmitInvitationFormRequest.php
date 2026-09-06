@@ -38,6 +38,6 @@ final class SubmitInvitationFormRequest extends FormRequest
         $invitation = app(FormInvitationService::class)->resolve($form, (string) $this->route('token'));
         $record = app(FormsInvitationTargetProvider::class)->resolve($invitation);
 
-        return app(FormDefinitionService::class)->validationRules($form->loadMissing('fields'), $record);
+        return app(FormDefinitionService::class)->validationRules($form->loadMissing('fields'), $record, (array) $this->input('answers', []));
     }
 }
