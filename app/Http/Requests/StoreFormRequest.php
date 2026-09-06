@@ -60,7 +60,7 @@ class StoreFormRequest extends FormRequest
             'fields.*.behavior.missing_only' => ['nullable', 'boolean'],
             'fields.*.visibility' => ['nullable', 'array'],
             'fields.*.visibility.field' => ['nullable', 'string', 'regex:/^[a-z][a-z0-9_]*$/'],
-            'fields.*.visibility.operator' => ['nullable', Rule::in(['equals', 'not_equals', 'contains'])],
+            'fields.*.visibility.operator' => ['nullable', Rule::in(['equals', 'not_equals', 'contains', 'is_empty'])],
             'fields.*.mapping' => ['nullable', 'array'],
             'fields.*.mapping.model' => ['nullable', 'required_with:fields.*.mapping.path', 'string', 'max:100'],
             'fields.*.mapping.path' => ['nullable', 'required_with:fields.*.mapping.model', 'string', 'max:255'],

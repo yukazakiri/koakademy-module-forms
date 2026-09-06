@@ -28,7 +28,7 @@ final class SubmitFormRequest extends FormRequest
             return [];
         }
 
-        $rules = app(FormDefinitionService::class)->validationRules($form->loadMissing('fields'));
+        $rules = app(FormDefinitionService::class)->validationRules($form->loadMissing('fields'), answers: (array) $this->input('answers', []));
 
         if ($form->access_mode === FormAccessMode::GuestIdentifier) {
             $key = $form->identity_type === 'student_id' ? 'respondent_identifier' : 'respondent_email';

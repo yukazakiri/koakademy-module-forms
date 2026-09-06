@@ -45,15 +45,16 @@ final class FormTemplateService
         'is_indigenous_person' => 'Choose Yes only if you identify as an Indigenous person.',
         'indigenous_group' => 'If applicable, enter the name of your Indigenous group.',
         'is_pwd' => 'Choose Yes if you are a person with disability.',
-        'pwd_type' => 'If applicable, describe the type of disability.',
+        'pwd_type' => 'If applicable, choose the disability category used in the school report.',
         'is_solo_parent' => 'Choose Yes if you are a solo parent.',
+        'is_solo_parent_dependent' => 'Choose Yes if you are a dependent of a solo parent.',
         'is_senior_citizen' => 'Choose Yes if you are a senior citizen.',
         'is_magna_carta' => 'Choose Yes if you are a Magna Carta beneficiary.',
         'is_underprivileged' => 'Choose Yes if you are classified as underprivileged.',
         'is_first_generation' => 'Choose Yes if you are the first person in your family to attend college.',
-        'family_income_bracket' => 'Choose the bracket that best represents your household income.',
-        'father_income_bracket' => 'Choose the bracket that best represents your father’s income, if applicable.',
-        'mother_income_bracket' => 'Choose the bracket that best represents your mother’s income, if applicable.',
+        'family_income_bracket' => 'Optional: choose one shared income range if both parents have the same income. If their incomes differ, leave this blank and choose the separate father and mother ranges below.',
+        'father_income_bracket' => 'Optional: choose your father’s income range only when it differs from your mother’s. Leave the family range blank.',
+        'mother_income_bracket' => 'Optional: choose your mother’s income range only when it differs from your father’s. Leave the family range blank.',
         'emergency_contact_name' => 'Enter the name of someone the school may contact in an emergency.',
         'emergency_contact_phone' => 'Enter the emergency contact’s active phone number.',
         'emergency_contact_address' => 'Enter the emergency contact’s complete address.',
@@ -66,7 +67,7 @@ final class FormTemplateService
         'mother_occupation' => 'Enter your mother’s current occupation, if applicable.',
         'mother_contact' => 'Enter a phone number where your mother can be reached.',
         'mother_email' => 'Enter your mother’s active email address, if available.',
-        'guardian_name' => 'Enter your guardian’s complete name, if applicable.',
+        'guardian_name' => 'Optional: enter a guardian if different from the emergency contact already provided.',
         'guardian_relationship' => 'Describe how your guardian is related to you.',
         'guardian_contact' => 'Enter a phone number where your guardian can be reached.',
         'guardian_email' => 'Enter your guardian’s active email address, if available.',
@@ -206,9 +207,15 @@ final class FormTemplateService
     /** @return array{description: string, placeholder: string} */
     public function studentProfileFieldDefaults(string $key, string $type): array
     {
+        $description = self::PROFILE_DESCRIPTIONS[$key] ?? 'Enter the information as it should appear in your school record.';
+        if ($this->isIncomeProfileField($key)) {
+            $mode = (string) config('income_brackets.default_mode', 'annual');
+            $description .= ' Income basis: '.config('income_brackets.modes.'.$mode.'.label', ucfirst($mode).' income').'.';
+        }
+
         return [
-            'description' => self::PROFILE_DESCRIPTIONS[$key] ?? 'Enter the information as it should appear in your school record.',
-            'placeholder' => self::PROFILE_PLACEHOLDERS[$key] ?? $this->defaultProfilePlaceholder($key, $type),
+            'description' => $description,
+            'placeholder' => $this->isIncomeProfileField($key) ? 'Choose an income range (optional)' : (self::PROFILE_PLACEHOLDERS[$key] ?? $this->defaultProfilePlaceholder($key, $type)),
         ];
     }
 
@@ -458,6 +465,19 @@ final class FormTemplateService
             'family_income_bracket',
             'father_income_bracket',
             'mother_income_bracket',
+            'father_name',
+            'father_occupation',
+            'father_contact',
+            'father_email',
+            'mother_name',
+            'mother_occupation',
+            'mother_contact',
+            'mother_email',
+            'guardian_name',
+            'guardian_relationship',
+            'guardian_contact',
+            'guardian_email',
+            'family_address',
             'facebook_contact',
             'twitter',
             'instagram',
@@ -491,6 +511,7 @@ final class FormTemplateService
     private function visibilityForProfileField(string $key): ?array
     {
         return match ($key) {
+            'father_income_bracket', 'mother_income_bracket' => ['field' => 'family_income_bracket', 'operator' => 'is_empty'],
             'indigenous_group' => ['field' => 'is_indigenous_person', 'operator' => 'equals', 'value' => 'yes'],
             'pwd_type' => ['field' => 'is_pwd', 'operator' => 'equals', 'value' => 'yes'],
             default => null,
