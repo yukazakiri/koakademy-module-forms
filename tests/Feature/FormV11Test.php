@@ -11,6 +11,7 @@ use Modules\Forms\Enums\FormAccessMode;
 use Modules\Forms\Enums\FormResponseStatus;
 use Modules\Forms\Enums\FormStatus;
 use Modules\Forms\Http\Controllers\FormAdminController;
+use Modules\Forms\Http\Controllers\PublicFormController;
 use Modules\Forms\Jobs\SendFormInvitation;
 use Modules\Forms\Mail\FormInvitationMail;
 use Modules\Forms\Models\Form;
@@ -55,7 +56,24 @@ it('renders invitation forms through the authenticated admin preview route', fun
     expect($httpResponse->getStatusCode())->toBe(200)
         ->and($payload['component'])->toBe('Forms/PublicShow')
         ->and($payload['props']['form']['access_mode'])->toBe('invitation')
+        ->and($payload['props']['hideMobileNavigation'])->toBeTrue()
         ->and($payload['props']['preview'])->toBeTrue();
+});
+
+it('marks public form pages to hide the app mobile navigation', function (): void {
+    $form = Form::factory()->create([
+        'access_mode' => FormAccessMode::Anonymous,
+    ]);
+
+    $request = Request::create(route('forms.show', ['form' => $form]), 'GET');
+    $request->headers->set('X-Inertia', 'true');
+
+    $httpResponse = app(PublicFormController::class)->show($request, $form)->toResponse($request);
+    $payload = json_decode($httpResponse->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($httpResponse->getStatusCode())->toBe(200)
+        ->and($payload['component'])->toBe('Forms/PublicShow')
+        ->and($payload['props']['hideMobileNavigation'])->toBeTrue();
 });
 
 it('generates the built-in student template from approved host fields', function (): void {

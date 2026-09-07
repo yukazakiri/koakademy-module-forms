@@ -32,6 +32,7 @@ final class PublicFormController
         return Inertia::render('Forms/PublicShow', [
             'form' => $this->definitions->publicPayload($form->load('fields')),
             'authenticated' => Auth::check(),
+            'hideMobileNavigation' => true,
             'user' => Auth::user() ? [
                 'name' => data_get(Auth::user(), 'name'),
                 'email' => data_get(Auth::user(), 'email'),
@@ -69,6 +70,7 @@ final class PublicFormController
             'title' => $form->title,
             'message' => data_get($form->settings, 'confirmation_message', 'Your response has been recorded.'),
             'form_url' => route('forms.show', ['form' => $form->slug]),
+            'hideMobileNavigation' => true,
         ]);
     }
 }

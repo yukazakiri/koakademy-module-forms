@@ -101,6 +101,7 @@ final class FormAdminController
         return Inertia::render('Forms/PublicShow', [
             'form' => $this->definitions->publicPayload($form->load('fields')),
             'authenticated' => true,
+            'hideMobileNavigation' => true,
             'user' => [
                 'name' => data_get($request->user(), 'name'),
                 'email' => data_get($request->user(), 'email'),
