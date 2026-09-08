@@ -2,6 +2,17 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.4.0 - 2026-09-06
+
+- Emitted student profile income brackets as selects from configured brackets.
+- Redesigned public form section progress as stepped flow.
+- Made profile contacts optional and standardized income ranges.
+- Supported hiding mobile navigation on standalone forms.
+
+## 1.3.0 - 2026-08-28
+
+- Added smart profile field controls and section-based student form pages.
+
 ## 1.2.1 - 2026-08-28
 
 - Hydrated built-in profile help text and placeholders in the edit payload so
