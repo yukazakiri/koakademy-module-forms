@@ -290,11 +290,6 @@ function OptionEditor({
 }: OptionEditorProps) {
   const options = Object.entries(field.options ?? {});
   const [newChoice, setNewChoice] = useState("");
-  const [bulkChoices, setBulkChoices] = useState("");
-  const [bulkFeedback, setBulkFeedback] = useState("");
-  const bulkChoiceInputId = useId();
-  const bulkChoiceDescriptionId = `${bulkChoiceInputId}-description`;
-  const slotsLeft = Math.max(0, MAX_FORM_FIELD_OPTIONS - options.length);
 
   function handleAdd(labelToAdd?: string): void {
     const raw = (labelToAdd ?? newChoice).trim();
@@ -303,10 +298,9 @@ function OptionEditor({
       let candidate = `Option ${n}`;
       while (
         options.some(
-          ([key, label]) =>
-            normalizedOption(label) === normalizedOption(candidate) ||
-            normalizedOption(key) ===
-              normalizedOption(optionKey(candidate, field.options ?? {})),
+          ([k, l]) =>
+            l.toLowerCase() === candidate.toLowerCase() ||
+            k.toLowerCase() === optionKey(candidate, field.options ?? {}).toLowerCase(),
         )
       ) {
         n++;
@@ -317,37 +311,6 @@ function OptionEditor({
     }
     onAdd(raw);
     setNewChoice("");
-  }
-
-  function handleImport(): void {
-    const result = onImport(bulkChoices);
-    const summary = importSummary(result);
-
-    setBulkFeedback(summary);
-    if (result.added > 0) {
-      setBulkChoices("");
-      toast.success(
-        `Imported ${pluralize(result.added, "choice", "choices")}`,
-        {
-          description: summary,
-        },
-      );
-      return;
-    }
-
-    if (result.limitSkipped > 0) {
-      toast.error("Choice limit reached", {
-        description: summary,
-      });
-      return;
-    }
-
-    toast.info(
-      result.parsed === 0 ? "No choices found" : "No new choices imported",
-      {
-        description: summary,
-      },
-    );
   }
 
   return (
@@ -361,8 +324,7 @@ function OptionEditor({
             </Badge>
           </div>
           <p className="text-muted-foreground mt-1 text-xs leading-5">
-            Add choices for this question below. Type a custom option or click
-            to add another choice.
+            Add choices for this question below. Type a custom option or click to add another choice.
           </p>
         </div>
         <Badge variant="outline">Student-facing list</Badge>
@@ -370,7 +332,6 @@ function OptionEditor({
 
       <div className="flex items-center gap-2">
         <Input
-          aria-label="New choice label"
           value={newChoice}
           onChange={(event) => setNewChoice(event.target.value)}
           onKeyDown={(event) => {
@@ -392,62 +353,11 @@ function OptionEditor({
         </Button>
       </div>
 
-      <div className="border-border/70 bg-background/70 grid gap-3 rounded-lg border p-3 shadow-xs">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <Label htmlFor={bulkChoiceInputId} className="text-sm font-medium">
-              Paste choices in bulk
-            </Label>
-            <p
-              id={bulkChoiceDescriptionId}
-              className="text-muted-foreground mt-1 text-xs leading-5"
-            >
-              Lines become choices. Tabs split spreadsheet cells, and commas
-              split only when the paste is one line.
-            </p>
-          </div>
-          <Badge variant={slotsLeft === 0 ? "destructive" : "outline"}>
-            {slotsLeft === 0
-              ? "Limit reached"
-              : `${pluralize(slotsLeft, "slot")} left`}
-          </Badge>
-        </div>
-        <Textarea
-          id={bulkChoiceInputId}
-          value={bulkChoices}
-          onChange={(event) => setBulkChoices(event.target.value)}
-          placeholder={`Grade 7\nGrade 8\nGrade 9`}
-          rows={4}
-          aria-describedby={bulkChoiceDescriptionId}
-          className="bg-background min-h-28 resize-y shadow-sm"
-        />
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p
-            className="text-muted-foreground text-xs leading-5"
-            aria-live="polite"
-          >
-            {bulkFeedback ||
-              "Blank entries are ignored; duplicate labels are skipped case-insensitively."}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleImport}
-            className="w-full gap-1.5 sm:w-auto"
-          >
-            <ClipboardList className="size-4" />
-            Import pasted choices
-          </Button>
-        </div>
-      </div>
-
       {options.length === 0 ? (
         <div className="border-border/70 bg-background/70 text-muted-foreground flex items-center justify-between gap-3 rounded-lg border border-dashed p-4 text-sm">
           <div className="flex items-center gap-2">
             <Plus className="size-4" />
-            <span>
-              Add at least two choices so respondents know what they can select.
-            </span>
+            <span>Add at least two choices so respondents know what they can select.</span>
           </div>
           <Button
             type="button"
@@ -628,12 +538,6 @@ export default function FormsBuilder({
         if (existing) {
           toast.info("Option already exists", {
             description: `"${label}" is already in the list.`,
-          });
-          return field;
-        }
-        if (Object.keys(options).length >= MAX_FORM_FIELD_OPTIONS) {
-          toast.error("Choice limit reached", {
-            description: `This question already has ${MAX_FORM_FIELD_OPTIONS} choices. Remove one before adding another.`,
           });
           return field;
         }
