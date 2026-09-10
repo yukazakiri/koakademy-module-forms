@@ -46,12 +46,8 @@ final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, F
                 'max' => $field['max'] ?? null,
                 'suggestible' => in_array((string) $field['key'], [
                     'birthplace',
-                    'region_of_origin',
                     'province_of_origin',
                     'city_of_origin',
-                    'religion',
-                    'nationality',
-                    'civil_status',
                 ], true),
             ],
             $workbook->fields(),

@@ -20,6 +20,93 @@ final class FormTemplateService
         'linkedin',
     ];
 
+    public const array CIVIL_STATUS_OPTIONS = [
+        'single' => 'Single',
+        'married' => 'Married',
+        'widowed' => 'Widowed',
+        'separated' => 'Separated',
+        'annulled' => 'Annulled',
+    ];
+
+    public const array NATIONALITY_OPTIONS = [
+        'filipino' => 'Filipino',
+        'american' => 'American',
+        'australian' => 'Australian',
+        'british' => 'British',
+        'canadian' => 'Canadian',
+        'chinese' => 'Chinese',
+        'indian' => 'Indian',
+        'indonesian' => 'Indonesian',
+        'japanese' => 'Japanese',
+        'korean' => 'Korean',
+        'malaysian' => 'Malaysian',
+        'singaporean' => 'Singaporean',
+        'thai' => 'Thai',
+        'vietnamese' => 'Vietnamese',
+        'other' => 'Other',
+    ];
+
+    public const array REGION_OPTIONS = [
+        'NCR' => 'National Capital Region (NCR)',
+        'CAR' => 'Cordillera Administrative Region (CAR)',
+        'Region I' => 'Region I - Ilocos Region',
+        'Region II' => 'Region II - Cagayan Valley',
+        'Region III' => 'Region III - Central Luzon',
+        'Region IV-A' => 'Region IV-A - CALABARZON',
+        'Region IV-B' => 'Region IV-B - MIMAROPA',
+        'Region V' => 'Region V - Bicol Region',
+        'Region VI' => 'Region VI - Western Visayas',
+        'Region VII' => 'Region VII - Central Visayas',
+        'Region VIII' => 'Region VIII - Eastern Visayas',
+        'Region IX' => 'Region IX - Zamboanga Peninsula',
+        'Region X' => 'Region X - Northern Mindanao',
+        'Region XI' => 'Region XI - Davao Region',
+        'Region XII' => 'Region XII - SOCCSKSARGEN',
+        'Region XIII' => 'Region XIII - Caraga',
+        'BARMM' => 'Bangsamoro Autonomous Region in Muslim Mindanao (BARMM)',
+    ];
+
+    public const array RELATIONSHIP_OPTIONS = [
+        'mother' => 'Mother',
+        'father' => 'Father',
+        'sibling' => 'Sibling',
+        'spouse' => 'Spouse',
+        'grandparent' => 'Grandparent',
+        'aunt' => 'Aunt',
+        'uncle' => 'Uncle',
+        'cousin' => 'Cousin',
+        'legal_guardian' => 'Legal Guardian',
+        'other' => 'Other',
+    ];
+
+    public const array RELIGION_OPTIONS = [
+        'roman_catholic' => 'Roman Catholic',
+        'islam' => 'Islam',
+        'iglesia_ni_cristo' => 'Iglesia ni Cristo',
+        'born_again_christian' => 'Born Again Christian',
+        'seventh_day_adventist' => 'Seventh-day Adventist',
+        'protestant' => 'Protestant',
+        'evangelical_christian' => 'Evangelical Christian',
+        'buddhist' => 'Buddhist',
+        'hindu' => 'Hindu',
+        'none' => 'None',
+        'prefer_not_to_say' => 'Prefer not to say',
+        'other' => 'Other',
+    ];
+
+    public const array PWD_TYPE_OPTIONS = [
+        'visual' => 'Visual Disability',
+        'hearing' => 'Hearing Disability',
+        'speech_and_language' => 'Speech and Language Impairment',
+        'physical_orthopedic' => 'Physical / Orthopedic Disability',
+        'intellectual' => 'Intellectual Disability',
+        'learning' => 'Learning Disability',
+        'psychosocial_mental' => 'Psychosocial / Mental Health Disability',
+        'chronic_illness' => 'Disability Due to Chronic Illness',
+        'multiple' => 'Multiple Disabilities',
+        'other' => 'Other',
+    ];
+
     /** @var array<string, string> */
     private const PROFILE_DESCRIPTIONS = [
         'first_name' => 'Use your official first name as it appears in your school records.',
@@ -98,22 +185,24 @@ final class FormTemplateService
         'suffix' => 'e.g. Jr.',
         'email' => 'name@example.com',
         'phone' => '+63 912 345 6789',
-        'nationality' => 'e.g. Filipino',
+        'nationality' => 'Select nationality or citizenship',
         'current_address' => 'House no., street, barangay, city, province',
         'permanent_address' => 'House no., street, barangay, city, province',
         'birthplace' => 'e.g. Quezon City, Metro Manila',
+        'civil_status' => 'Select civil status',
+        'religion' => 'Select religion',
         'weight' => 'e.g. 60',
         'height' => 'e.g. 170',
         'ethnicity' => 'e.g. Tagalog',
-        'region_of_origin' => 'e.g. Region IV-A',
+        'region_of_origin' => 'Select region of origin',
         'province_of_origin' => 'e.g. Laguna',
         'city_of_origin' => 'e.g. Calamba City',
         'indigenous_group' => 'Enter group name',
-        'pwd_type' => 'Enter disability type',
+        'pwd_type' => 'Select disability type',
         'emergency_contact_name' => 'e.g. Maria Dela Cruz',
         'emergency_contact_phone' => 'e.g. 0912 345 6789',
         'emergency_contact_address' => 'Complete home address',
-        'emergency_contact_relationship' => 'e.g. Mother',
+        'emergency_contact_relationship' => 'Select relationship',
         'father_name' => 'e.g. Juan Dela Cruz Sr.',
         'father_occupation' => 'e.g. Engineer',
         'father_contact' => 'e.g. 0912 345 6789',
@@ -123,7 +212,7 @@ final class FormTemplateService
         'mother_contact' => 'e.g. 0912 345 6789',
         'mother_email' => 'mother@example.com',
         'guardian_name' => 'e.g. Maria Dela Cruz',
-        'guardian_relationship' => 'e.g. Aunt',
+        'guardian_relationship' => 'Select relationship',
         'guardian_contact' => 'e.g. 0912 345 6789',
         'guardian_email' => 'guardian@example.com',
         'family_address' => 'Complete family home address',
@@ -303,6 +392,10 @@ final class FormTemplateService
     private function profileField(array $field): array
     {
         $key = (string) ($field['key'] ?? Str::snake((string) ($field['label'] ?? 'field')));
+        $options = $this->optionsForProfileField($key, is_array($field['options'] ?? null) ? $field['options'] : []);
+        $isIncome = $this->isIncomeProfileField($key);
+        $isDropdownRecommended = $this->isDropdownRecommendedProfileField($key);
+
         $type = str_contains($key, 'address')
             ? 'textarea'
             : match ($field['type'] ?? 'string') {
@@ -314,24 +407,21 @@ final class FormTemplateService
                 'year' => 'year',
                 default => in_array($key, ['phone', 'father_contact', 'mother_contact', 'guardian_contact', 'emergency_contact_phone'], true)
                     ? 'phone'
-                    : 'text',
+                    : (($isIncome || $isDropdownRecommended) && $options !== [] ? 'select' : 'text'),
             };
-        $options = $this->optionsForProfileField($key, is_array($field['options'] ?? null) ? $field['options'] : []);
-        if ($this->isIncomeProfileField($key) && $options !== []) {
+
+        if (($isIncome || $isDropdownRecommended) && $options !== []) {
             $type = 'select';
         }
 
         $recordSuggestions = in_array($key, [
             'birthplace',
-            'region_of_origin',
             'province_of_origin',
             'city_of_origin',
-            'religion',
-            'nationality',
-            'civil_status',
         ], true);
         $control = match (true) {
-            $this->isIncomeProfileField($key) && $options !== [] => 'select',
+            $isIncome && $options !== [] => 'select',
+            $isDropdownRecommended && $options !== [] => 'select',
             $recordSuggestions => 'combobox',
             $type === 'yes_no' || ($type === 'select' && count($options) <= 4) => 'radio_cards',
             $type === 'select' => 'select',
@@ -395,17 +485,48 @@ final class FormTemplateService
             'email' => 'name@example.com',
             'number', 'year' => 'Enter a number',
             'phone' => 'e.g. 0912 345 6789',
+            'select' => 'Select an option',
             default => 'Enter '.Str::headline($key),
         };
     }
 
+    public function defaultOptionsForProfileField(string $key): array
+    {
+        return match ($key) {
+            'civil_status' => self::CIVIL_STATUS_OPTIONS,
+            'nationality' => self::NATIONALITY_OPTIONS,
+            'region_of_origin' => self::REGION_OPTIONS,
+            'religion' => self::RELIGION_OPTIONS,
+            'pwd_type' => self::PWD_TYPE_OPTIONS,
+            'emergency_contact_relationship', 'guardian_relationship' => self::RELATIONSHIP_OPTIONS,
+            default => [],
+        };
+    }
+
+    public function isDropdownRecommendedProfileField(string $key): bool
+    {
+        return in_array($key, [
+            'civil_status',
+            'nationality',
+            'region_of_origin',
+            'religion',
+            'pwd_type',
+            'emergency_contact_relationship',
+            'guardian_relationship',
+        ], true);
+    }
+
     private function optionsForProfileField(string $key, array $options): array
     {
-        if (! $this->isIncomeProfileField($key)) {
-            return $options;
+        if ($this->isIncomeProfileField($key)) {
+            return $this->incomeBracketOptions() ?: $options;
         }
 
-        return $this->incomeBracketOptions() ?: $options;
+        if ($this->isDropdownRecommendedProfileField($key)) {
+            return $options !== [] ? $options : $this->defaultOptionsForProfileField($key);
+        }
+
+        return $options;
     }
 
     private function incomeBracketOptions(): array
