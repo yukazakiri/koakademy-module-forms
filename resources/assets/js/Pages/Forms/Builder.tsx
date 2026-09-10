@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import formsRoutes from "@/routes/administrators/forms";
 import type { User } from "@/types/user";
 import { Head, Link, router, useForm } from "@inertiajs/react";
+import { MAX_FORM_FIELD_OPTIONS, prepareChoiceImport } from "./option-paste";
 import {
   ArrowDown,
   ArrowUp,
@@ -41,7 +42,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useMemo, useState, type FormEvent, type HTMLAttributes } from "react";
+import {
+  useId,
+  useMemo,
+  useState,
+  type FormEvent,
+  type HTMLAttributes,
+} from "react";
 import { toast } from "sonner";
 
 interface FormField {
@@ -184,9 +191,10 @@ function optionKey(label: string, options: Record<string, string>): string {
       .trim()
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_|_$/g, "") || "option";
+  const existingKeys = new Set(Object.keys(options).map(normalizedOption));
   let key = base;
   let suffix = 2;
-  while (Object.prototype.hasOwnProperty.call(options, key)) {
+  while (existingKeys.has(normalizedOption(key))) {
     key = `${base}_${suffix}`;
     suffix += 1;
   }
@@ -204,11 +212,82 @@ function optionItems(options: Record<string, string>): ComboboxOption[] {
 interface OptionEditorProps {
   field: FormField;
   onAdd: (value: string) => void;
+  onImport: (value: string) => BulkOptionImportResult;
   onRename: (key: string, label: string) => void;
   onRemove: (key: string) => void;
 }
 
-function OptionEditor({ field, onAdd, onRename, onRemove }: OptionEditorProps) {
+interface BulkOptionImportResult {
+  added: number;
+  duplicates: number;
+  limitSkipped: number;
+  blankCount: number;
+  parsed: number;
+}
+
+function normalizedOption(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function pluralize(
+  count: number,
+  singular: string,
+  plural = `${singular}s`,
+): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function importSkippedNotes(result: BulkOptionImportResult): string[] {
+  return [
+    result.duplicates > 0
+      ? `${pluralize(result.duplicates, "duplicate")} skipped`
+      : "",
+    result.limitSkipped > 0
+      ? `${pluralize(
+          result.limitSkipped,
+          "choice",
+          "choices",
+        )} skipped at the ${MAX_FORM_FIELD_OPTIONS}-choice limit`
+      : "",
+    result.blankCount > 0
+      ? `${pluralize(result.blankCount, "blank entry", "blank entries")} ignored`
+      : "",
+  ].filter(Boolean);
+}
+
+function importSummary(result: BulkOptionImportResult): string {
+  const skippedNotes = importSkippedNotes(result);
+
+  if (result.added > 0) {
+    return skippedNotes.length > 0
+      ? `Imported ${pluralize(
+          result.added,
+          "choice",
+          "choices",
+        )}. ${skippedNotes.join(". ")}.`
+      : `Imported ${pluralize(result.added, "choice", "choices")}.`;
+  }
+
+  if (result.parsed === 0) {
+    return skippedNotes.length > 0
+      ? `No choices found. ${skippedNotes.join(". ")}.`
+      : "No choices found. Paste one choice per line, spreadsheet cells separated by tabs, or a one-line comma list.";
+  }
+
+  if (skippedNotes.length > 0) {
+    return `No choices imported. ${skippedNotes.join(". ")}.`;
+  }
+
+  return `No new choices imported. ${pluralize(result.duplicates, "duplicate")} skipped.`;
+}
+
+function OptionEditor({
+  field,
+  onAdd,
+  onImport,
+  onRename,
+  onRemove,
+}: OptionEditorProps) {
   const options = Object.entries(field.options ?? {});
   const [newChoice, setNewChoice] = useState("");
 
@@ -240,7 +319,9 @@ function OptionEditor({ field, onAdd, onRename, onRemove }: OptionEditorProps) {
         <div>
           <div className="flex items-center gap-2">
             <CardTitle className="text-sm">Answer choices</CardTitle>
-            <Badge variant="secondary">{options.length}</Badge>
+            <Badge variant="secondary">
+              {options.length}/{MAX_FORM_FIELD_OPTIONS}
+            </Badge>
           </div>
           <p className="text-muted-foreground mt-1 text-xs leading-5">
             Add choices for this question below. Type a custom option or click to add another choice.
@@ -448,10 +529,11 @@ export default function FormsBuilder({
     setFields((current) =>
       current.map((field, fieldIndex) => {
         if (fieldIndex !== index) return field;
-        const existing = Object.entries(field.options ?? {}).some(
+        const options = field.options ?? {};
+        const existing = Object.entries(options).some(
           ([key, existingLabel]) =>
-            key.toLowerCase() === label.toLowerCase() ||
-            existingLabel.toLowerCase() === label.toLowerCase(),
+            normalizedOption(key) === normalizedOption(label) ||
+            normalizedOption(existingLabel) === normalizedOption(label),
         );
         if (existing) {
           toast.info("Option already exists", {
@@ -462,12 +544,50 @@ export default function FormsBuilder({
         return {
           ...field,
           options: {
-            ...field.options,
-            [optionKey(label, field.options ?? {})]: label,
+            ...options,
+            [optionKey(label, options)]: label,
           },
         };
       }),
     );
+  }
+
+  function importOptions(index: number, value: string): BulkOptionImportResult {
+    const field = fields[index];
+
+    if (!field) {
+      return {
+        added: 0,
+        duplicates: 0,
+        limitSkipped: 0,
+        blankCount: 0,
+        parsed: 0,
+      };
+    }
+
+    const options = field.options ?? {};
+    const importPlan = prepareChoiceImport(value, options);
+
+    if (importPlan.labels.length > 0) {
+      let nextOptions = { ...options };
+
+      importPlan.labels.forEach((label) => {
+        nextOptions = {
+          ...nextOptions,
+          [optionKey(label, nextOptions)]: label,
+        };
+      });
+
+      updateField(index, { options: nextOptions });
+    }
+
+    return {
+      added: importPlan.labels.length,
+      duplicates: importPlan.duplicates,
+      limitSkipped: importPlan.limitSkipped,
+      blankCount: importPlan.blankCount,
+      parsed: importPlan.parsed,
+    };
   }
 
   function renameOption(index: number, key: string, label: string): void {
@@ -867,6 +987,7 @@ export default function FormsBuilder({
                           <OptionEditor
                             field={field}
                             onAdd={(value) => addOption(index, value)}
+                            onImport={(value) => importOptions(index, value)}
                             onRename={(key, label) =>
                               renameOption(index, key, label)
                             }
