@@ -193,10 +193,22 @@ final class FormDefinitionService
                 : ($value === null ? null : Str::of((string) $value)->trim()->toString());
 
             if (($field->type === 'select' || $field->type === 'radio') && is_string($val) && is_array($field->options)) {
-                foreach ($field->options as $optKey => $optLabel) {
-                    if (strcasecmp((string) $optLabel, $val) === 0 || strcasecmp((string) $optKey, $val) === 0) {
-                        $val = (string) $optKey;
+                $matchedKey = null;
+                foreach (array_keys($field->options) as $optKey) {
+                    if (strcasecmp((string) $optKey, $val) === 0) {
+                        $matchedKey = (string) $optKey;
                         break;
+                    }
+                }
+
+                if ($matchedKey !== null) {
+                    $val = $matchedKey;
+                } else {
+                    foreach ($field->options as $optKey => $optLabel) {
+                        if (strcasecmp((string) $optLabel, $val) === 0) {
+                            $val = (string) $optKey;
+                            break;
+                        }
                     }
                 }
             }

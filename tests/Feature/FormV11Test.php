@@ -433,6 +433,27 @@ it('upgrades saved student profile dropdown field definitions', function (): voi
         ->and($otherField->type)->toBe('text');
 });
 
+it('preserves customized choices during the dropdown migration', function (): void {
+    $form = Form::factory()->create(['settings' => ['template_key' => 'student_profile_completion']]);
+    $form->fields()->create([
+        'field_key' => 'nationality',
+        'label' => 'Custom Nationality',
+        'type' => 'text',
+        'options' => ['custom_country' => 'Custom Country'],
+        'presentation' => ['control' => 'input', 'placeholder' => 'Custom placeholder'],
+        'position' => 1,
+    ]);
+
+    $migration = include dirname(__DIR__, 2).'/database/migrations/2026_09_08_000001_upgrade_student_profile_dropdown_fields.php';
+    $migration->up();
+
+    $field = $form->fields()->where('field_key', 'nationality')->firstOrFail();
+    expect($field->type)->toBe('select')
+        ->and($field->options)->toBe(['custom_country' => 'Custom Country'])
+        ->and($field->presentation['control'])->toBe('select')
+        ->and($field->presentation['placeholder'])->toBe('Custom placeholder');
+});
+
 it('upgrades saved student profile income bracket field definitions only', function (): void {
     config()->set('income_brackets', [
         'default_mode' => 'annual',

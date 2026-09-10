@@ -35,26 +35,37 @@ return new class extends Migration
         }
 
         foreach ($this->dropdownFields as $fieldKey) {
-            $options = $templateService->defaultOptionsForProfileField($fieldKey);
-            if ($options === []) {
+            $defaultOptions = $templateService->defaultOptionsForProfileField($fieldKey);
+            if ($defaultOptions === []) {
                 continue;
             }
 
-            DB::table('form_fields')
+            $fields = DB::table('form_fields')
                 ->whereIn('form_id', $formIds)
                 ->where('field_key', $fieldKey)
-                ->update([
-                    'type' => 'select',
-                    'options' => json_encode($options, JSON_THROW_ON_ERROR),
-                    'presentation' => json_encode([
-                        'control' => 'select',
-                        'input_mode' => 'text',
-                        'suggestion_source' => 'none',
-                        'suggestion_limit' => 10,
-                        'placeholder' => 'Select an option',
-                        'unit' => null,
-                    ], JSON_THROW_ON_ERROR),
-                ]);
+                ->get(['id', 'options', 'presentation']);
+
+            foreach ($fields as $field) {
+                $existingOptions = $this->decodeJson($field->options);
+                $optionsToSave = $existingOptions !== [] ? $existingOptions : $defaultOptions;
+                $existingPresentation = $this->decodeJson($field->presentation);
+
+                DB::table('form_fields')
+                    ->where('id', $field->id)
+                    ->update([
+                        'type' => 'select',
+                        'options' => json_encode($optionsToSave, JSON_THROW_ON_ERROR),
+                        'presentation' => json_encode([
+                            ...$existingPresentation,
+                            'control' => 'select',
+                            'input_mode' => $existingPresentation['input_mode'] ?? 'text',
+                            'suggestion_source' => 'none',
+                            'suggestion_limit' => $existingPresentation['suggestion_limit'] ?? 10,
+                            'placeholder' => $existingPresentation['placeholder'] ?? 'Select an option',
+                            'unit' => $existingPresentation['unit'] ?? null,
+                        ], JSON_THROW_ON_ERROR),
+                    ]);
+            }
         }
     }
 

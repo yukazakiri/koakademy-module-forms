@@ -127,3 +127,25 @@ it('rejects invalid select option values', function (): void {
     expect($validator->fails())->toBeTrue()
         ->and($validator->errors()->has('answers.family_income_bracket'))->toBeTrue();
 });
+
+it('prefers exact option keys before matching option labels during normalization', function (): void {
+    $form = Form::factory()->create(['status' => FormStatus::Published]);
+    $form->fields()->create([
+        'field_key' => 'choice_field',
+        'label' => 'Choice Field',
+        'type' => 'select',
+        'position' => 1,
+        'options' => [
+            'first' => 'second',
+            'second' => 'Second choice',
+        ],
+        'presentation' => ['control' => 'select'],
+    ]);
+    $form->load('fields');
+
+    $normalized = app(FormDefinitionService::class)->normalizeAnswers($form, [
+        'choice_field' => 'second',
+    ]);
+
+    expect($normalized['choice_field'])->toBe('second');
+});
