@@ -2,6 +2,12 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.6.0 - 2026-09-11
+
+- Added bulk clipboard paste for choice and dropdown fields: paste one option per line, tab-delimited spreadsheet content, or comma-separated lists.
+- Trimmed blank entries, skipped duplicate keys and labels case-insensitively, preserved existing option keys, and enforced the 100-choice limit with explicit feedback.
+- Normalized option key collision handling to detect case-insensitive duplicates when adding new choices.
+
 ## 1.5.0 - 2026-09-08
 
 - Improved the form builder option editor with direct text input and an "+ Add another choice" button for choice and dropdown fields.
