@@ -2,6 +2,12 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.5.0 - 2026-09-08
+
+- Improved the form builder option editor with direct text input and an "+ Add another choice" button for choice and dropdown fields.
+- Recommended and configured dropdown select controls with standard options on supported student profile template fields (civil status, nationality, region of origin, religion, disability type, emergency contact relationship, and guardian relationship).
+- Added database migration to upgrade saved student profile completion forms to dropdown select fields.
+
 ## 1.4.0 - 2026-09-06
 
 - Emitted student profile income brackets as selects from configured brackets.

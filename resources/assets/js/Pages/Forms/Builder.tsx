@@ -210,6 +210,29 @@ interface OptionEditorProps {
 
 function OptionEditor({ field, onAdd, onRename, onRemove }: OptionEditorProps) {
   const options = Object.entries(field.options ?? {});
+  const [newChoice, setNewChoice] = useState("");
+
+  function handleAdd(labelToAdd?: string): void {
+    const raw = (labelToAdd ?? newChoice).trim();
+    if (!raw) {
+      let n = options.length + 1;
+      let candidate = `Option ${n}`;
+      while (
+        options.some(
+          ([k, l]) =>
+            l.toLowerCase() === candidate.toLowerCase() ||
+            k.toLowerCase() === optionKey(candidate, field.options ?? {}).toLowerCase(),
+        )
+      ) {
+        n++;
+        candidate = `Option ${n}`;
+      }
+      onAdd(candidate);
+      return;
+    }
+    onAdd(raw);
+    setNewChoice("");
+  }
 
   return (
     <div className="bg-muted/20 border-border/70 space-y-4 rounded-xl border p-4 sm:p-5">
@@ -220,35 +243,58 @@ function OptionEditor({ field, onAdd, onRename, onRemove }: OptionEditorProps) {
             <Badge variant="secondary">{options.length}</Badge>
           </div>
           <p className="text-muted-foreground mt-1 text-xs leading-5">
-            Type a choice below and press Enter. Existing choices can be
-            searched, renamed, or removed at any time.
+            Add choices for this question below. Type a custom option or click to add another choice.
           </p>
         </div>
         <Badge variant="outline">Student-facing list</Badge>
       </div>
 
-      <Combobox
-        options={optionItems(field.options ?? {})}
-        value=""
-        onValueChange={onAdd}
-        placeholder="Add or search for a choice…"
-        searchPlaceholder="Type a new choice or search existing ones…"
-        emptyText="Type a value to add a new choice."
-        allowCreate
-        createLabel="Add choice"
-      />
+      <div className="flex items-center gap-2">
+        <Input
+          value={newChoice}
+          onChange={(event) => setNewChoice(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              handleAdd();
+            }
+          }}
+          placeholder="Add a new choice and press Enter…"
+          className="bg-background h-10 flex-1 shadow-sm"
+        />
+        <Button
+          type="button"
+          onClick={() => handleAdd()}
+          className="h-10 shrink-0 gap-1.5"
+        >
+          <Plus className="size-4" />
+          Add choice
+        </Button>
+      </div>
 
       {options.length === 0 ? (
-        <div className="border-border/70 bg-background/70 text-muted-foreground flex items-center gap-3 rounded-lg border border-dashed p-4 text-sm">
-          <Plus className="size-4" />
-          Add at least two choices so respondents know what they can select.
+        <div className="border-border/70 bg-background/70 text-muted-foreground flex items-center justify-between gap-3 rounded-lg border border-dashed p-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Plus className="size-4" />
+            <span>Add at least two choices so respondents know what they can select.</span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => handleAdd()}
+            className="shrink-0 gap-1"
+          >
+            <Plus className="size-3.5" />
+            Add choice
+          </Button>
         </div>
       ) : (
         <div className="space-y-2">
           {options.map(([key, label], optionIndex) => (
             <div
               key={key}
-              className="border-border/70 bg-background flex items-center gap-3 rounded-lg border p-2"
+              className="border-border/70 bg-background flex items-center gap-3 rounded-lg border p-2 shadow-xs"
             >
               <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold">
                 {optionIndex + 1}
@@ -256,6 +302,14 @@ function OptionEditor({ field, onAdd, onRename, onRemove }: OptionEditorProps) {
               <Input
                 value={label}
                 onChange={(event) => onRename(key, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    if (optionIndex === options.length - 1) {
+                      handleAdd();
+                    }
+                  }
+                }}
                 aria-label={`Choice ${optionIndex + 1}`}
                 placeholder={`Choice ${optionIndex + 1}`}
                 className="border-0 bg-transparent shadow-none focus-visible:ring-0"
@@ -274,6 +328,19 @@ function OptionEditor({ field, onAdd, onRename, onRemove }: OptionEditorProps) {
               </Button>
             </div>
           ))}
+
+          <div className="pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleAdd()}
+              className="w-full sm:w-auto gap-1.5"
+            >
+              <Plus className="size-4" />
+              Add another choice
+            </Button>
+          </div>
         </div>
       )}
 
@@ -386,7 +453,12 @@ export default function FormsBuilder({
             key.toLowerCase() === label.toLowerCase() ||
             existingLabel.toLowerCase() === label.toLowerCase(),
         );
-        if (existing) return field;
+        if (existing) {
+          toast.info("Option already exists", {
+            description: `"${label}" is already in the list.`,
+          });
+          return field;
+        }
         return {
           ...field,
           options: {

@@ -136,7 +136,10 @@ final class FormDefinitionService
             'year' => ['integer', 'between:1900,'.now()->year],
             'phone' => ['string', 'regex:/^\+?[0-9 ()-]{7,30}$/'],
             'date' => ['date'],
-            'select', 'radio' => [Rule::in(array_keys($field->options ?? []))],
+            'select', 'radio' => [Rule::in([
+                ...array_keys($field->options ?? []),
+                ...array_values($field->options ?? []),
+            ])],
             'yes_no' => [Rule::in(array_keys($field->options ?: ['yes' => 'Yes', 'no' => 'No']))],
             'checkbox' => ['array', 'min:1', 'max:'.((int) ($validation['max_selections'] ?? 50))],
             'file' => [File::types($validation['mimes'] ?? ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'])->max((int) config('forms.max_upload_kilobytes', 10240))],
@@ -185,9 +188,20 @@ final class FormDefinitionService
                 continue;
             }
 
-            $normalized[$key] = is_array($value)
+            $val = is_array($value)
                 ? array_values(array_map(static fn (mixed $item): string => Str::of((string) $item)->trim()->toString(), $value))
                 : ($value === null ? null : Str::of((string) $value)->trim()->toString());
+
+            if (($field->type === 'select' || $field->type === 'radio') && is_string($val) && is_array($field->options)) {
+                foreach ($field->options as $optKey => $optLabel) {
+                    if (strcasecmp((string) $optLabel, $val) === 0 || strcasecmp((string) $optKey, $val) === 0) {
+                        $val = (string) $optKey;
+                        break;
+                    }
+                }
+            }
+
+            $normalized[$key] = $val;
         }
 
         return $normalized;

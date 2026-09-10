@@ -317,6 +317,122 @@ it('keeps provided income options when bracket config is unavailable', function 
         ->and($definition['fields'][0]['presentation']['control'])->toBe('select');
 });
 
+it('recommends dropdown select controls with standard options for supported student profile fields', function (): void {
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->with('student')->andReturn([
+        [
+            'key' => 'civil_status',
+            'label' => 'Civil Status',
+            'type' => 'string',
+            'group' => 'Personal',
+            'write_paths' => ['student.civil_status'],
+        ],
+        [
+            'key' => 'nationality',
+            'label' => 'Nationality / Citizenship',
+            'type' => 'string',
+            'group' => 'Personal',
+            'write_paths' => ['student.nationality'],
+        ],
+        [
+            'key' => 'region_of_origin',
+            'label' => 'Region of Origin',
+            'type' => 'string',
+            'group' => 'Origin and Equity',
+            'write_paths' => ['student.region_of_origin'],
+        ],
+        [
+            'key' => 'religion',
+            'label' => 'Religion',
+            'type' => 'string',
+            'group' => 'Personal',
+            'write_paths' => ['student.religion'],
+        ],
+        [
+            'key' => 'pwd_type',
+            'label' => 'Disability Type',
+            'type' => 'string',
+            'group' => 'Origin and Equity',
+            'write_paths' => ['student.pwd_type'],
+        ],
+        [
+            'key' => 'emergency_contact_relationship',
+            'label' => 'Emergency Contact Relationship',
+            'type' => 'string',
+            'group' => 'Emergency Contact',
+            'write_paths' => ['contact.emergency_contact_relationship'],
+        ],
+        [
+            'key' => 'guardian_relationship',
+            'label' => 'Guardian Relationship',
+            'type' => 'string',
+            'group' => 'Parent and Guardian',
+            'write_paths' => ['parent.guardian_relationship'],
+        ],
+    ]);
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $fields = collect(app(FormTemplateService::class)->definition('student_profile_completion')['fields'])->keyBy('field_key');
+
+    expect($fields['civil_status']['type'])->toBe('select')
+        ->and($fields['civil_status']['presentation']['control'])->toBe('select')
+        ->and($fields['civil_status']['options'])->toHaveKey('single')
+        ->and($fields['nationality']['type'])->toBe('select')
+        ->and($fields['nationality']['presentation']['control'])->toBe('select')
+        ->and($fields['nationality']['options'])->toHaveKey('filipino')
+        ->and($fields['region_of_origin']['type'])->toBe('select')
+        ->and($fields['region_of_origin']['presentation']['control'])->toBe('select')
+        ->and($fields['region_of_origin']['options'])->toHaveKey('NCR')
+        ->and($fields['religion']['type'])->toBe('select')
+        ->and($fields['religion']['presentation']['control'])->toBe('select')
+        ->and($fields['religion']['options'])->toHaveKey('roman_catholic')
+        ->and($fields['pwd_type']['type'])->toBe('select')
+        ->and($fields['pwd_type']['presentation']['control'])->toBe('select')
+        ->and($fields['pwd_type']['options'])->toHaveKey('visual')
+        ->and($fields['emergency_contact_relationship']['type'])->toBe('select')
+        ->and($fields['emergency_contact_relationship']['presentation']['control'])->toBe('select')
+        ->and($fields['emergency_contact_relationship']['options'])->toHaveKey('mother')
+        ->and($fields['guardian_relationship']['type'])->toBe('select')
+        ->and($fields['guardian_relationship']['presentation']['control'])->toBe('select')
+        ->and($fields['guardian_relationship']['options'])->toHaveKey('legal_guardian');
+});
+
+it('upgrades saved student profile dropdown field definitions', function (): void {
+    $form = Form::factory()->create(['settings' => ['template_key' => 'student_profile_completion']]);
+    $otherForm = Form::factory()->create(['settings' => ['template_key' => 'custom']]);
+    $form->fields()->createMany([
+        ['field_key' => 'civil_status', 'label' => 'Civil status', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'input'], 'position' => 1],
+        ['field_key' => 'nationality', 'label' => 'Nationality', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'input'], 'position' => 2],
+        ['field_key' => 'region_of_origin', 'label' => 'Region of Origin', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'input'], 'position' => 3],
+        ['field_key' => 'birthplace', 'label' => 'Birthplace', 'type' => 'text', 'options' => [], 'presentation' => ['control' => 'combobox'], 'position' => 4],
+    ]);
+    $otherForm->fields()->create([
+        'field_key' => 'civil_status',
+        'label' => 'Civil status',
+        'type' => 'text',
+        'options' => [],
+        'presentation' => ['control' => 'input'],
+        'position' => 1,
+    ]);
+
+    $migration = include dirname(__DIR__, 2).'/database/migrations/2026_09_08_000001_upgrade_student_profile_dropdown_fields.php';
+    $migration->up();
+
+    $upgradedFields = $form->fields()->whereIn('field_key', ['civil_status', 'nationality', 'region_of_origin'])->get()->keyBy('field_key');
+    $unrelatedField = $form->fields()->where('field_key', 'birthplace')->firstOrFail();
+    $otherField = $otherForm->fields()->where('field_key', 'civil_status')->firstOrFail();
+
+    expect($upgradedFields['civil_status']->type)->toBe('select')
+        ->and($upgradedFields['civil_status']->options)->toHaveKey('single')
+        ->and($upgradedFields['civil_status']->presentation['control'])->toBe('select')
+        ->and($upgradedFields['nationality']->type)->toBe('select')
+        ->and($upgradedFields['nationality']->options)->toHaveKey('filipino')
+        ->and($upgradedFields['region_of_origin']->type)->toBe('select')
+        ->and($upgradedFields['region_of_origin']->options)->toHaveKey('NCR')
+        ->and($unrelatedField->type)->toBe('text')
+        ->and($otherField->type)->toBe('text');
+});
+
 it('upgrades saved student profile income bracket field definitions only', function (): void {
     config()->set('income_brackets', [
         'default_mode' => 'annual',
