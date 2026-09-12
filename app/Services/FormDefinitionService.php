@@ -32,6 +32,7 @@ final class FormDefinitionService
     public function publicPayload(Form $form, ?object $record = null): array
     {
         $fields = $form->fields
+            ->filter(fn (FormField $field): bool => $this->isActiveField($field))
             ->filter(fn (FormField $field): bool => $record === null || $this->shouldRenderField($field, $record))
             ->map(fn (FormField $field): array => $this->fieldPayload($field, $record))
             ->values()
@@ -79,6 +80,10 @@ final class FormDefinitionService
         $answers = [];
 
         foreach ($form->fields as $field) {
+            if (! $this->isActiveField($field)) {
+                continue;
+            }
+
             $mapping = $field->mapping;
             if (! is_array($mapping) || ($mapping['model'] ?? null) !== 'student' || ! is_string($mapping['path'] ?? null)) {
                 continue;
@@ -102,6 +107,10 @@ final class FormDefinitionService
         $rules = ['answers' => ['array']];
 
         foreach ($form->fields as $field) {
+            if (! $this->isActiveField($field)) {
+                continue;
+            }
+
             if ($record !== null && ! $this->shouldRenderField($field, $record)) {
                 continue;
             }
@@ -170,7 +179,7 @@ final class FormDefinitionService
 
         foreach ($answers as $key => $value) {
             $field = $fieldLookup->get((string) $key);
-            if (! $field instanceof FormField || ! $this->isVisible($field, $answers)) {
+            if (! $field instanceof FormField || ! $this->isActiveField($field) || ! $this->isVisible($field, $answers)) {
                 continue;
             }
 
@@ -253,6 +262,11 @@ final class FormDefinitionService
         return ! $this->isFilled($this->models->read($record, $mapping['path']));
     }
 
+    public function isActiveField(FormField $field): bool
+    {
+        return data_get($field->behavior, 'retired') !== true;
+    }
+
     private function prefillValue(FormField $field, mixed $value): mixed
     {
         if ($value instanceof \BackedEnum) {
@@ -287,12 +301,14 @@ final class FormDefinitionService
     /** @return list<array<string, mixed>> */
     public function snapshot(Form $form): array
     {
-        return $form->fields->map(fn (FormField $field): array => [
-            'key' => $field->field_key,
-            'label' => $field->label,
-            'type' => $field->type,
-            'mapping' => $field->mapping,
-            'is_sensitive' => $field->is_sensitive,
-        ])->values()->all();
+        return $form->fields
+            ->filter(fn (FormField $field): bool => $this->isActiveField($field))
+            ->map(fn (FormField $field): array => [
+                'key' => $field->field_key,
+                'label' => $field->label,
+                'type' => $field->type,
+                'mapping' => $field->mapping,
+                'is_sensitive' => $field->is_sensitive,
+            ])->values()->all();
     }
 }

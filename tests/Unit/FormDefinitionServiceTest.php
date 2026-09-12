@@ -25,7 +25,9 @@ it('maps yes and no answers to booleans and records shared or separate income se
     config()->set('income_brackets.default_mode', 'annual');
     $registry->write($record, 'student.family_income_bracket', 'below_250k');
     expect($record->income_bracket_mode)->toBe('annual')
-        ->and($record->use_same_parent_income)->toBeTrue();
+        ->and($record->use_same_parent_income)->toBeTrue()
+        ->and($record->father_income_bracket)->toBeNull()
+        ->and($record->mother_income_bracket)->toBeNull();
     $registry->write($record, 'student.father_income_bracket', 'below_250k');
     expect($record->use_same_parent_income)->toBeFalse();
     $registry->write($record, 'student.family_income_bracket', null);

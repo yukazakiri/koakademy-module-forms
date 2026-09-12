@@ -124,9 +124,14 @@ final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, F
 
             $record->setAttribute($attribute, $value);
 
-            if (in_array($attribute, ['family_income_bracket', 'father_income_bracket', 'mother_income_bracket'], true) && $value !== null && $value !== '') {
+            if ($attribute === 'family_income_bracket' && $value !== null && $value !== '') {
+                $record->setAttribute('income_bracket_mode', 'annual');
+                $record->setAttribute('use_same_parent_income', true);
+                $record->setAttribute('father_income_bracket', null);
+                $record->setAttribute('mother_income_bracket', null);
+            } elseif (in_array($attribute, ['father_income_bracket', 'mother_income_bracket'], true) && $value !== null && $value !== '') {
                 $record->setAttribute('income_bracket_mode', (string) config('income_brackets.default_mode', 'annual'));
-                $record->setAttribute('use_same_parent_income', $attribute === 'family_income_bracket');
+                $record->setAttribute('use_same_parent_income', false);
             }
 
             return;
