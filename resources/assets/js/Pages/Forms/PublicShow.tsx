@@ -203,30 +203,6 @@ export default function PublicFormShow({
     form.settings?.template_key === "student_profile_completion";
   const usesPhilippineProfileLocationControls =
     isStudentProfileForm && form.profile_context?.is_philippine === true;
-
-  useEffect(() => {
-    const nextAnswers = { ...formState.data.answers };
-    let changed = false;
-
-    if (nextAnswers.province_of_origin === "__direct_region__") {
-      delete nextAnswers.province_of_origin;
-      changed = true;
-    }
-
-    if (!usesPhilippineProfileLocationControls) {
-      return;
-    }
-
-    if (nextAnswers.region_of_origin === "") {
-      delete nextAnswers.province_of_origin;
-      delete nextAnswers.city_of_origin;
-      changed = true;
-    }
-
-    if (changed) {
-      formState.setData("answers", nextAnswers);
-    }
-  }, [formState, usesPhilippineProfileLocationControls]);
   const visibleFields = useMemo(
     () =>
       form.fields.filter((field) =>
