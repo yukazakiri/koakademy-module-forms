@@ -2,13 +2,16 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Modules\Forms\Contracts\FormsInvitationTargetProvider;
 use Modules\Forms\Contracts\FormsModelRegistry;
+use Modules\Forms\Contracts\FormsTenantCountryResolver;
 use Modules\Forms\Enums\FormAccessMode;
 use Modules\Forms\Enums\FormResponseStatus;
 use Modules\Forms\Enums\FormStatus;
@@ -307,6 +310,42 @@ it('generates the four gender choices and all approved equity fields', function 
         ])->count())->toBe(14);
 });
 
+it('uses Philippine ethnicity and location controls only for Philippine profile templates', function (): void {
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->with('student')->andReturn([
+        ['key' => 'ethnicity', 'label' => 'Ethnicity', 'type' => 'string', 'group' => 'Origin and Equity', 'write_paths' => ['student.ethnicity']],
+        ['key' => 'region_of_origin', 'label' => 'Region of Origin', 'type' => 'choice', 'group' => 'Origin and Equity', 'write_paths' => ['student.region_of_origin']],
+        ['key' => 'province_of_origin', 'label' => 'Province of Origin', 'type' => 'string', 'group' => 'Origin and Equity', 'write_paths' => ['student.province_of_origin']],
+        ['key' => 'city_of_origin', 'label' => 'City / Municipality of Origin', 'type' => 'string', 'group' => 'Origin and Equity', 'write_paths' => ['student.city_of_origin']],
+    ]);
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $countries = Mockery::mock(FormsTenantCountryResolver::class);
+    $countries->shouldReceive('countryCode')->with(null)->andReturn('PH');
+    app()->instance(FormsTenantCountryResolver::class, $countries);
+
+    $philippineFields = collect(app(FormTemplateService::class)->definition('student_profile_completion')['fields'])->keyBy('field_key');
+
+    expect($philippineFields['ethnicity']['type'])->toBe('select')
+        ->and($philippineFields['ethnicity']['presentation']['control'])->toBe('combobox')
+        ->and($philippineFields['ethnicity']['presentation']['allow_custom'])->toBeTrue()
+        ->and($philippineFields['ethnicity']['options'])->toHaveKey('Cebuano')
+        ->and($philippineFields['region_of_origin']['presentation']['control'])->toBe('philippine_location')
+        ->and($philippineFields['province_of_origin']['presentation']['control'])->toBe('philippine_location')
+        ->and($philippineFields['city_of_origin']['presentation']['control'])->toBe('philippine_location');
+
+    $countries = Mockery::mock(FormsTenantCountryResolver::class);
+    $countries->shouldReceive('countryCode')->with(null)->andReturn('US');
+    app()->instance(FormsTenantCountryResolver::class, $countries);
+
+    $foreignFields = collect(app(FormTemplateService::class)->definition('student_profile_completion')['fields'])->keyBy('field_key');
+
+    expect($foreignFields['ethnicity']['type'])->toBe('text')
+        ->and($foreignFields['ethnicity']['options'])->toBe([])
+        ->and($foreignFields['region_of_origin']['type'])->toBe('text')
+        ->and($foreignFields['region_of_origin']['presentation']['control'])->toBe('input');
+});
+
 it('keeps provided income options when bracket config is unavailable', function (): void {
     config()->set('income_brackets', []);
 
@@ -383,6 +422,9 @@ it('recommends dropdown select controls with standard options for supported stud
         ],
     ]);
     app()->instance(FormsModelRegistry::class, $registry);
+    $countries = Mockery::mock(FormsTenantCountryResolver::class);
+    $countries->shouldReceive('countryCode')->with(null)->andReturn(null);
+    app()->instance(FormsTenantCountryResolver::class, $countries);
 
     $fields = collect(app(FormTemplateService::class)->definition('student_profile_completion')['fields'])->keyBy('field_key');
 
@@ -392,9 +434,9 @@ it('recommends dropdown select controls with standard options for supported stud
         ->and($fields['nationality']['type'])->toBe('select')
         ->and($fields['nationality']['presentation']['control'])->toBe('select')
         ->and($fields['nationality']['options'])->toHaveKey('filipino')
-        ->and($fields['region_of_origin']['type'])->toBe('select')
-        ->and($fields['region_of_origin']['presentation']['control'])->toBe('select')
-        ->and($fields['region_of_origin']['options'])->toHaveKey('NCR')
+        ->and($fields['region_of_origin']['type'])->toBe('text')
+        ->and($fields['region_of_origin']['presentation']['control'])->toBe('input')
+        ->and($fields['region_of_origin']['options'])->toBe([])
         ->and($fields['religion']['type'])->toBe('select')
         ->and($fields['religion']['presentation']['control'])->toBe('select')
         ->and($fields['religion']['options'])->toHaveKey('roman_catholic')
@@ -593,6 +635,76 @@ it('updates existing profile forms and templates without changing responses', fu
         ->and($secondRun['gender']->options)->toBe($firstRun['gender']->options)
         ->and(collect($template->fresh()->definition['fields'])->pluck('field_key')->all())->not->toContain('father_income_bracket')
         ->and($payload)->toBe(['gender' => 'male']);
+});
+
+it('upgrades Philippine profile ethnicity and location controls only', function (): void {
+    $schoolsTableCreated = ! Schema::hasTable('schools');
+    if ($schoolsTableCreated) {
+        Schema::create('schools', function (Blueprint $table): void {
+            $table->id();
+            $table->string('country_code')->nullable();
+        });
+    }
+
+    try {
+        $columns = Schema::getColumnListing('schools');
+        $baseSchool = array_fill_keys($columns, null);
+        unset($baseSchool['created_at'], $baseSchool['updated_at']);
+        $baseSchool['country_code'] = 'PH';
+        $baseSchool['id'] = 1;
+        DB::table('schools')->insert($baseSchool);
+        $baseSchool['country_code'] = 'US';
+        $baseSchool['id'] = 2;
+        DB::table('schools')->insert($baseSchool);
+        $fields = [
+            ['field_key' => 'ethnicity', 'label' => 'Ethnicity', 'type' => 'text', 'position' => 1],
+            ['field_key' => 'region_of_origin', 'label' => 'Region', 'type' => 'select', 'position' => 2, 'options' => ['NCR' => 'National Capital Region (NCR)']],
+            ['field_key' => 'province_of_origin', 'label' => 'Province', 'type' => 'text', 'position' => 3],
+            ['field_key' => 'city_of_origin', 'label' => 'City', 'type' => 'text', 'position' => 4],
+        ];
+        $philippineForm = Form::factory()->create([
+            'tenant_key' => '1',
+            'settings' => ['template_key' => 'student_profile_completion'],
+        ]);
+        $foreignForm = Form::factory()->create([
+            'tenant_key' => '2',
+            'settings' => ['template_key' => 'student_profile_completion'],
+        ]);
+        $philippineForm->fields()->createMany($fields);
+        $foreignForm->fields()->createMany($fields);
+        $philippineTemplate = FormTemplate::query()->create([
+            'tenant_key' => '1',
+            'name' => 'Philippine profile',
+            'definition' => ['settings' => ['template_key' => 'student_profile_completion'], 'fields' => $fields],
+        ]);
+        $foreignTemplate = FormTemplate::query()->create([
+            'tenant_key' => '2',
+            'name' => 'Foreign profile',
+            'definition' => ['settings' => ['template_key' => 'student_profile_completion'], 'fields' => $fields],
+        ]);
+
+        $migration = include dirname(__DIR__, 2).'/database/migrations/2026_09_12_000002_upgrade_student_profile_philippine_location_controls.php';
+        $migration->up();
+        $migration->up();
+
+        $philippineFields = $philippineForm->fresh('fields')->fields->keyBy('field_key');
+        $foreignFields = $foreignForm->fresh('fields')->fields->keyBy('field_key');
+
+        expect($philippineFields['ethnicity']->type)->toBe('select')
+            ->and($philippineFields['ethnicity']->options)->toHaveKey('Cebuano')
+            ->and($philippineFields['ethnicity']->presentation['allow_custom'])->toBeTrue()
+            ->and($philippineFields['region_of_origin']->presentation['control'])->toBe('philippine_location')
+            ->and($philippineFields['province_of_origin']->presentation['control'])->toBe('philippine_location')
+            ->and($philippineFields['city_of_origin']->presentation['control'])->toBe('philippine_location')
+            ->and($foreignFields['ethnicity']->type)->toBe('text')
+            ->and($foreignFields['region_of_origin']->presentation)->toBeNull()
+            ->and(collect($philippineTemplate->fresh()->definition['fields'])->firstWhere('field_key', 'ethnicity')['options'])->toHaveKey('Cebuano')
+            ->and(collect($foreignTemplate->fresh()->definition['fields'])->firstWhere('field_key', 'ethnicity')['type'])->toBe('text');
+    } finally {
+        if ($schoolsTableCreated) {
+            Schema::dropIfExists('schools');
+        }
+    }
 });
 
 it('does not expose retired fields in new submissions while preserving their mappings', function (): void {

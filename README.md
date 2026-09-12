@@ -63,6 +63,10 @@ media fields are intentionally excluded from this built-in template.
 The built-in template collects one optional annual parent or household income
 range and supports Male, Female, Other, and Prefer not to say gender choices.
 It includes the complete origin and equity catalog exposed by KoAkademy.
+For forms owned by a Philippine institution, ethnicity is a searchable list
+with a self-described option, and origin fields use a region-to-province-to-city
+or municipality cascade. Forms owned by other institutions retain the generic
+origin controls.
 Administrators can customize the help text and placeholder for each question
 from the editor; existing profile forms receive the built-in guidance as an
 editable starting point.

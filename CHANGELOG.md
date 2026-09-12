@@ -2,6 +2,13 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.8.0 - 2026-09-12
+
+- Added Philippine-only student profile controls based on the form's owning school country.
+- Added a searchable, creatable Philippine ethnicity selector that preserves self-described values.
+- Added cascading Philippine region, province, and city or municipality selectors, including directly administered localities.
+- Upgraded existing Philippine student profile forms and saved templates without changing non-Philippine forms.
+
 ## 1.7.0 - 2026-09-12
 
 - Updated the built-in Student Profile Completion form with gender choices for Male, Female, Other, and Prefer not to say.

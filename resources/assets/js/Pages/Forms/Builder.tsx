@@ -62,9 +62,16 @@ interface FormField {
   validation: Record<string, string | number>;
   visibility: { field?: string; operator?: string; value?: string } | null;
   presentation: {
-    control?: string;
+    control?:
+      | "auto"
+      | "input"
+      | "select"
+      | "radio_cards"
+      | "combobox"
+      | "philippine_location";
     placeholder?: string;
     input_mode?: string;
+    allow_custom?: boolean;
     suggestion_source?: string;
     suggestion_limit?: number;
     unit?: string;
@@ -300,7 +307,8 @@ function OptionEditor({
         options.some(
           ([k, l]) =>
             l.toLowerCase() === candidate.toLowerCase() ||
-            k.toLowerCase() === optionKey(candidate, field.options ?? {}).toLowerCase(),
+            k.toLowerCase() ===
+              optionKey(candidate, field.options ?? {}).toLowerCase(),
         )
       ) {
         n++;
@@ -324,7 +332,8 @@ function OptionEditor({
             </Badge>
           </div>
           <p className="text-muted-foreground mt-1 text-xs leading-5">
-            Add choices for this question below. Type a custom option or click to add another choice.
+            Add choices for this question below. Type a custom option or click
+            to add another choice.
           </p>
         </div>
         <Badge variant="outline">Student-facing list</Badge>
@@ -357,7 +366,9 @@ function OptionEditor({
         <div className="border-border/70 bg-background/70 text-muted-foreground flex items-center justify-between gap-3 rounded-lg border border-dashed p-4 text-sm">
           <div className="flex items-center gap-2">
             <Plus className="size-4" />
-            <span>Add at least two choices so respondents know what they can select.</span>
+            <span>
+              Add at least two choices so respondents know what they can select.
+            </span>
           </div>
           <Button
             type="button"
