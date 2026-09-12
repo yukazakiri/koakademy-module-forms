@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use Modules\Forms\Contracts\FormsFieldSuggestionProvider;
 use Modules\Forms\Contracts\FormsInvitationTargetProvider;
+use Modules\Forms\Contracts\FormsTenantCountryResolver;
 use Modules\Forms\Providers\FormsServiceProvider;
 use Modules\Forms\Services\KoAkademyFormsFieldSuggestionProvider;
 use Modules\Forms\Services\KoAkademyFormsInvitationTargetProvider;
+use Modules\Forms\Services\KoAkademyFormsTenantCountryResolver;
 
 beforeEach(function (): void {
     if (! class_exists('App\Models\Student')) {
@@ -14,12 +16,9 @@ beforeEach(function (): void {
     }
 
     if (! class_exists('App\Support\RegistrarStudentProfileWorkbook')) {
-        eval('namespace App\Support; class RegistrarStudentProfileWorkbook {}');
+        eval('namespace App\Support; class RegistrarStudentProfileWorkbook { public function fields(): array { return []; } }');
     }
 
-    if (! class_exists('App\Services\TenantContext')) {
-        eval('namespace App\Services; class TenantContext {}');
-    }
 });
 
 it('injects dependencies when constructing the KoAkademy providers', function (): void {
@@ -28,5 +27,7 @@ it('injects dependencies when constructing the KoAkademy providers', function ()
     expect(app(FormsFieldSuggestionProvider::class))
         ->toBeInstanceOf(KoAkademyFormsFieldSuggestionProvider::class)
         ->and(app(FormsInvitationTargetProvider::class))
-        ->toBeInstanceOf(KoAkademyFormsInvitationTargetProvider::class);
+        ->toBeInstanceOf(KoAkademyFormsInvitationTargetProvider::class)
+        ->and(app(FormsTenantCountryResolver::class))
+        ->toBeInstanceOf(KoAkademyFormsTenantCountryResolver::class);
 });

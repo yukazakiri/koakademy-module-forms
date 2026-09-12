@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
+use Modules\Forms\Contracts\FormsTenantCountryResolver;
 use Modules\Forms\Enums\FormStatus;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Services\FormDefinitionService;
@@ -150,4 +151,51 @@ it('prefers exact option keys before matching option labels during normalization
     ]);
 
     expect($normalized['choice_field'])->toBe('second');
+});
+
+it('accepts a custom answer from a creatable select field', function (): void {
+    $form = Form::factory()->create(['status' => FormStatus::Published]);
+    $form->fields()->create([
+        'field_key' => 'ethnicity',
+        'label' => 'Ethnicity',
+        'type' => 'select',
+        'position' => 1,
+        'options' => ['Cebuano' => 'Cebuano'],
+        'presentation' => ['control' => 'combobox', 'allow_custom' => true],
+    ]);
+    $form->load('fields');
+
+    $validator = Validator::make([
+        'answers' => ['ethnicity' => 'Custom community'],
+    ], app(FormDefinitionService::class)->validationRules($form));
+
+    expect($validator->passes())->toBeTrue()
+        ->and(app(FormDefinitionService::class)->normalizeAnswers($form, [
+            'ethnicity' => ' Custom community ',
+        ]))->toBe(['ethnicity' => 'Custom community']);
+});
+
+it('exposes Philippine profile context only when the form tenant country is PH', function (): void {
+    $form = Form::factory()->create(['tenant_key' => 'school-1']);
+    $countries = Mockery::mock(FormsTenantCountryResolver::class);
+    $countries->shouldReceive('countryCode')->with('school-1')->andReturn('PH');
+    app()->instance(FormsTenantCountryResolver::class, $countries);
+
+    expect(app(FormDefinitionService::class)->publicPayload($form)['profile_context'])->toBe([
+        'is_philippine' => true,
+    ]);
+});
+
+it('does not persist the direct-region selector sentinel as a student province', function (): void {
+    $form = Form::factory()->create(['status' => FormStatus::Published]);
+    $form->fields()->createMany([
+        ['field_key' => 'province_of_origin', 'label' => 'Province', 'type' => 'text', 'position' => 1],
+        ['field_key' => 'city_of_origin', 'label' => 'City', 'type' => 'text', 'position' => 2],
+    ]);
+    $form->load('fields');
+
+    expect(app(FormDefinitionService::class)->normalizeAnswers($form, [
+        'province_of_origin' => '__direct_region__',
+        'city_of_origin' => 'Binondo',
+    ]))->toBe(['city_of_origin' => 'Binondo']);
 });

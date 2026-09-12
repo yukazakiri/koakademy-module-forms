@@ -14,10 +14,12 @@ use Illuminate\Support\ServiceProvider;
 use Modules\Forms\Contracts\FormsFieldSuggestionProvider;
 use Modules\Forms\Contracts\FormsInvitationTargetProvider;
 use Modules\Forms\Contracts\FormsModelRegistry;
+use Modules\Forms\Contracts\FormsTenantCountryResolver;
 use Modules\Forms\Contracts\FormsTenantResolver;
 use Modules\Forms\Services\KoAkademyFormsFieldSuggestionProvider;
 use Modules\Forms\Services\KoAkademyFormsInvitationTargetProvider;
 use Modules\Forms\Services\KoAkademyFormsModelRegistry;
+use Modules\Forms\Services\KoAkademyFormsTenantCountryResolver;
 use Modules\Forms\Services\KoAkademyFormsTenantResolver;
 use Modules\Forms\Services\NullFormsFieldSuggestionProvider;
 use Modules\Forms\Services\NullFormsInvitationTargetProvider;
@@ -49,6 +51,9 @@ final class FormsServiceProvider extends ServiceProvider
             return class_exists(TenantContext::class)
                 ? new KoAkademyFormsTenantResolver
                 : new NullFormsTenantResolver;
+        });
+        $this->app->singleton(FormsTenantCountryResolver::class, function (): FormsTenantCountryResolver {
+            return new KoAkademyFormsTenantCountryResolver;
         });
         $this->app->singleton(FormsInvitationTargetProvider::class, function (Application $app): FormsInvitationTargetProvider {
             return class_exists(Student::class) && class_exists(RegistrarStudentProfileWorkbook::class)

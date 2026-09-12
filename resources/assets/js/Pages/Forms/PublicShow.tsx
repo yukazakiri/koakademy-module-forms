@@ -4,6 +4,7 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import { PhilippineProfileLocationField } from "./philippine-profile-location-fields";
 import publicForms from "@/routes/forms";
 import axios from "axios";
 import { Head, useForm } from "@inertiajs/react";
@@ -36,6 +37,7 @@ interface FormField {
     placeholder?: string;
     input_mode?: string;
     unit?: string;
+    allow_custom?: boolean;
   };
   suggestions?: string[];
 }
@@ -50,6 +52,9 @@ interface FormDefinition {
   settings?: {
     allow_unverified_guest_response?: boolean;
     template_key?: string;
+  };
+  profile_context?: {
+    is_philippine?: boolean;
   };
   fields: FormField[];
 }
@@ -196,6 +201,32 @@ export default function PublicFormShow({
     requiresStudentVerification && !identityVerified && !identityUnverified;
   const isStudentProfileForm =
     form.settings?.template_key === "student_profile_completion";
+  const usesPhilippineProfileLocationControls =
+    isStudentProfileForm && form.profile_context?.is_philippine === true;
+
+  useEffect(() => {
+    const nextAnswers = { ...formState.data.answers };
+    let changed = false;
+
+    if (nextAnswers.province_of_origin === "__direct_region__") {
+      delete nextAnswers.province_of_origin;
+      changed = true;
+    }
+
+    if (!usesPhilippineProfileLocationControls) {
+      return;
+    }
+
+    if (nextAnswers.region_of_origin === "") {
+      delete nextAnswers.province_of_origin;
+      delete nextAnswers.city_of_origin;
+      changed = true;
+    }
+
+    if (changed) {
+      formState.setData("answers", nextAnswers);
+    }
+  }, [formState, usesPhilippineProfileLocationControls]);
   const visibleFields = useMemo(
     () =>
       form.fields.filter((field) =>
@@ -767,6 +798,14 @@ export default function PublicFormShow({
                     value: optionValue,
                     label: optionLabel,
                   }));
+                  const isPhilippineProfileLocationField =
+                    usesPhilippineProfileLocationControls &&
+                    [
+                      "ethnicity",
+                      "region_of_origin",
+                      "province_of_origin",
+                      "city_of_origin",
+                    ].includes(field.key);
                   return (
                     <div
                       key={field.key}
@@ -796,7 +835,19 @@ export default function PublicFormShow({
                             </p>
                           )}
                           <div className="mt-4">
-                            {field.type === "textarea" ? (
+                            {isPhilippineProfileLocationField ? (
+                              <PhilippineProfileLocationField
+                                field={field}
+                                answers={formState.data.answers}
+                                onAnswersChange={(updates) => {
+                                  setPageError(null);
+                                  formState.setData("answers", {
+                                    ...formState.data.answers,
+                                    ...updates,
+                                  });
+                                }}
+                              />
+                            ) : field.type === "textarea" ? (
                               <Textarea
                                 id={`answer-${field.key}`}
                                 value={String(value ?? "")}
@@ -841,6 +892,10 @@ export default function PublicFormShow({
                                 placeholder={placeholder ?? "Choose an option"}
                                 searchPlaceholder={`Search ${field.label.toLowerCase()}…`}
                                 emptyText="No matching options."
+                                allowCreate={
+                                  field.presentation?.allow_custom === true
+                                }
+                                createLabel="Use"
                                 required={field.required}
                               />
                             ) : isChoice &&

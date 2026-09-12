@@ -12,6 +12,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\File;
 use Modules\Forms\Contracts\FormsFieldSuggestionProvider;
 use Modules\Forms\Contracts\FormsModelRegistry;
+use Modules\Forms\Contracts\FormsTenantCountryResolver;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Models\FormField;
 
@@ -20,6 +21,7 @@ final class FormDefinitionService
     public function __construct(
         private readonly FormsModelRegistry $models,
         private readonly FormsFieldSuggestionProvider $suggestions,
+        private readonly FormsTenantCountryResolver $tenantCountries,
     ) {}
 
     /** @return list<string> */
@@ -46,6 +48,9 @@ final class FormDefinitionService
             'access_mode' => $form->access_mode->value,
             'identity_type' => $form->identity_type,
             'settings' => $form->settings ?? [],
+            'profile_context' => [
+                'is_philippine' => $this->tenantCountries->countryCode($form->tenant_key) === 'PH',
+            ],
             'fields' => $fields,
         ];
     }
@@ -145,10 +150,12 @@ final class FormDefinitionService
             'year' => ['integer', 'between:1900,'.now()->year],
             'phone' => ['string', 'regex:/^\+?[0-9 ()-]{7,30}$/'],
             'date' => ['date'],
-            'select', 'radio' => [Rule::in([
-                ...array_keys($field->options ?? []),
-                ...array_values($field->options ?? []),
-            ])],
+            'select', 'radio' => data_get($field->presentation, 'allow_custom') === true
+                ? ['string']
+                : [Rule::in([
+                    ...array_keys($field->options ?? []),
+                    ...array_values($field->options ?? []),
+                ])],
             'yes_no' => [Rule::in(array_keys($field->options ?: ['yes' => 'Yes', 'no' => 'No']))],
             'checkbox' => ['array', 'min:1', 'max:'.((int) ($validation['max_selections'] ?? 50))],
             'file' => [File::types($validation['mimes'] ?? ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'])->max((int) config('forms.max_upload_kilobytes', 10240))],
@@ -223,6 +230,10 @@ final class FormDefinitionService
             }
 
             $normalized[$key] = $val;
+        }
+
+        if (($normalized['province_of_origin'] ?? null) === '__direct_region__') {
+            unset($normalized['province_of_origin']);
         }
 
         return $normalized;

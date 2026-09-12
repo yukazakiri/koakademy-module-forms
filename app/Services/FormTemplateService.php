@@ -6,12 +6,60 @@ namespace Modules\Forms\Services;
 
 use Illuminate\Support\Str;
 use Modules\Forms\Contracts\FormsModelRegistry;
+use Modules\Forms\Contracts\FormsTenantCountryResolver;
 use Modules\Forms\Contracts\FormsTenantResolver;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Models\FormTemplate;
 
 final class FormTemplateService
 {
+    public const array PHILIPPINE_ETHNICITY_OPTIONS = [
+        'Aeta' => 'Aeta',
+        'Agta' => 'Agta',
+        'Alangan Mangyan' => 'Alangan Mangyan',
+        'Ati' => 'Ati',
+        'Badjao / Sama-Bajau' => 'Badjao / Sama-Bajau',
+        'Bikolano' => 'Bikolano',
+        'Blaan' => 'Blaan',
+        'Bontoc' => 'Bontoc',
+        'Bukidnon' => 'Bukidnon',
+        'Butuanon' => 'Butuanon',
+        'Cagayanon' => 'Cagayanon',
+        'Calamian Tagbanwa' => 'Calamian Tagbanwa',
+        'Cebuano' => 'Cebuano',
+        'Chavacano' => 'Chavacano',
+        'Hiligaynon / Ilonggo' => 'Hiligaynon / Ilonggo',
+        'Ibanag' => 'Ibanag',
+        'Ifugao' => 'Ifugao',
+        'Igorot' => 'Igorot',
+        'Ilocano' => 'Ilocano',
+        'Iranun' => 'Iranun',
+        'Isnag' => 'Isnag',
+        'Itawis' => 'Itawis',
+        'Ivatan' => 'Ivatan',
+        'Kalinga' => 'Kalinga',
+        'Kamayo' => 'Kamayo',
+        'Kankanaey' => 'Kankanaey',
+        'Kapampangan' => 'Kapampangan',
+        'Kinaray-a' => 'Kinaray-a',
+        'Maguindanaon' => 'Maguindanaon',
+        'Manobo' => 'Manobo',
+        'Maranao' => 'Maranao',
+        'Masbateño' => 'Masbateño',
+        'Palawano' => 'Palawano',
+        'Pangasinan' => 'Pangasinan',
+        'Sama' => 'Sama',
+        'Subanen' => 'Subanen',
+        'Surigaonon' => 'Surigaonon',
+        'Tagalog' => 'Tagalog',
+        'Tagbanwa' => 'Tagbanwa',
+        'Tausug' => 'Tausug',
+        "T'boli" => "T'boli",
+        'Teduray' => 'Teduray',
+        'Waray' => 'Waray',
+        'Yakan' => 'Yakan',
+    ];
+
     /** @var list<string> */
     private const EXCLUDED_PROFILE_FIELDS = [
         'facebook_contact',
@@ -134,10 +182,10 @@ final class FormTemplateService
         'birthplace' => 'Enter the city or municipality and province where you were born.',
         'weight' => 'Enter your current weight in kilograms.',
         'height' => 'Enter your current height in centimeters.',
-        'ethnicity' => 'Enter the ethnic group you identify with, if applicable.',
-        'region_of_origin' => 'Enter the region where your family originates.',
-        'province_of_origin' => 'Enter the province where your family originates.',
-        'city_of_origin' => 'Enter the city or municipality where your family originates.',
+        'ethnicity' => 'Choose the ethnic group you identify with, or add your own if it is not listed.',
+        'region_of_origin' => 'Choose the Philippine region where your family originates.',
+        'province_of_origin' => 'Choose the province within the selected region.',
+        'city_of_origin' => 'Choose the city or municipality within the selected province or region.',
         'is_indigenous_person' => 'Choose Yes only if you identify as an Indigenous person.',
         'indigenous_group' => 'If applicable, enter the name of your Indigenous group.',
         'is_pwd' => 'Choose Yes if you are a person with disability.',
@@ -237,6 +285,7 @@ final class FormTemplateService
     public function __construct(
         private readonly FormsModelRegistry $models,
         private readonly FormsTenantResolver $tenantResolver,
+        private readonly FormsTenantCountryResolver $tenantCountries,
     ) {}
 
     /** @return list<array<string, mixed>> */
@@ -373,6 +422,8 @@ final class FormTemplateService
             return null;
         }
 
+        $isPhilippine = $this->tenantCountries->countryCode($this->tenantResolver->key()) === 'PH';
+
         return [
             'title' => 'Student Profile Completion',
             'description' => 'Complete the missing information in your student profile. Your answers update only blank fields on your record.',
@@ -390,7 +441,7 @@ final class FormTemplateService
             ],
             'fields' => collect($fields)
                 ->reject(fn (array $field): bool => in_array((string) ($field['key'] ?? ''), self::EXCLUDED_PROFILE_FIELDS, true))
-                ->map(fn (array $field): array => $this->profileField($field))
+                ->map(fn (array $field): array => $this->profileField($field, $isPhilippine))
                 ->values()
                 ->all(),
         ];
@@ -398,10 +449,12 @@ final class FormTemplateService
 
     /** @param array<string, mixed> $field
      *  @return array<string, mixed> */
-    private function profileField(array $field): array
+    private function profileField(array $field, bool $isPhilippine = false): array
     {
         $key = (string) ($field['key'] ?? Str::snake((string) ($field['label'] ?? 'field')));
-        $options = $this->optionsForProfileField($key, is_array($field['options'] ?? null) ? $field['options'] : []);
+        $isPhilippineLocation = $isPhilippine && in_array($key, ['region_of_origin', 'province_of_origin', 'city_of_origin'], true);
+        $isPhilippineEthnicity = $isPhilippine && $key === 'ethnicity';
+        $options = $this->optionsForProfileField($key, is_array($field['options'] ?? null) ? $field['options'] : [], $isPhilippine);
         $isIncome = $this->isIncomeProfileField($key);
         $isDropdownRecommended = $this->isDropdownRecommendedProfileField($key);
 
@@ -423,12 +476,26 @@ final class FormTemplateService
             $type = 'select';
         }
 
+        if ($isPhilippineEthnicity) {
+            $type = 'select';
+        }
+
+        if ($isPhilippineLocation) {
+            $type = 'text';
+        }
+
+        if ($key === 'region_of_origin' && ! $isPhilippine) {
+            $type = 'text';
+        }
+
         $recordSuggestions = in_array($key, [
             'birthplace',
             'province_of_origin',
             'city_of_origin',
         ], true);
         $control = match (true) {
+            $isPhilippineLocation => 'philippine_location',
+            $isPhilippineEthnicity => 'combobox',
             $isIncome && $options !== [] => 'select',
             $isDropdownRecommended && $options !== [] => 'select',
             $recordSuggestions => 'combobox',
@@ -450,6 +517,7 @@ final class FormTemplateService
             'presentation' => [
                 'control' => $control,
                 'input_mode' => $type === 'phone' ? 'tel' : ($type === 'number' || $type === 'year' ? 'numeric' : 'text'),
+                'allow_custom' => $isPhilippineEthnicity,
                 'suggestion_source' => $recordSuggestions ? 'record_values' : 'none',
                 'suggestion_limit' => 10,
                 'placeholder' => $defaults['placeholder'],
@@ -527,8 +595,16 @@ final class FormTemplateService
         ], true);
     }
 
-    private function optionsForProfileField(string $key, array $options): array
+    private function optionsForProfileField(string $key, array $options, bool $isPhilippine): array
     {
+        if ($key === 'ethnicity' && $isPhilippine) {
+            return self::PHILIPPINE_ETHNICITY_OPTIONS;
+        }
+
+        if ($key === 'region_of_origin' && ! $isPhilippine) {
+            return [];
+        }
+
         if ($key === 'gender') {
             return self::GENDER_OPTIONS;
         }
