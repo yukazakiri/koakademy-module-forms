@@ -2,6 +2,14 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.7.0 - 2026-09-12
+
+- Updated the built-in Student Profile Completion form with gender choices for Male, Female, Other, and Prefer not to say.
+- Added automatic migration of existing profile forms and saved templates for origin, all supported equity flags, and one shared annual parent or household income range.
+- Retired parent-specific income questions from new profile forms while preserving historical mappings and responses for review and application.
+- Made retired fields invisible to new public submissions and invitation targeting without deleting their stored definitions.
+- Made shared income mappings explicitly annual and clear stale parent-specific income values when applied.
+
 ## 1.6.0 - 2026-09-11
 
 - Added bulk clipboard paste for choice and dropdown fields: paste one option per line, tab-delimited spreadsheet content, or comma-separated lists.

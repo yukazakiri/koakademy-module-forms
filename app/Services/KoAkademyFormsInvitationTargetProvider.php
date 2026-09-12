@@ -22,6 +22,7 @@ final class KoAkademyFormsInvitationTargetProvider implements FormsInvitationTar
     public function candidates(Form $form): iterable
     {
         $fields = $form->fields
+            ->filter(fn ($field): bool => data_get($field->behavior, 'retired') !== true)
             ->filter(fn ($field): bool => is_array($field->mapping) && ($field->mapping['model'] ?? null) === 'student')
             ->values();
 

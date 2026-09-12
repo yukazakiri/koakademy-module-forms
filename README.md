@@ -60,6 +60,9 @@ applies only values that are still blank while the target record is locked.
 The published student view includes section guidance, completion progress,
 friendly placeholders, and short explanations for profile questions. Social
 media fields are intentionally excluded from this built-in template.
+The built-in template collects one optional annual parent or household income
+range and supports Male, Female, Other, and Prefer not to say gender choices.
+It includes the complete origin and equity catalog exposed by KoAkademy.
 Administrators can customize the help text and placeholder for each question
 from the editor; existing profile forms receive the built-in guidance as an
 editable starting point.

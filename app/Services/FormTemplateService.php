@@ -18,6 +18,8 @@ final class FormTemplateService
         'twitter',
         'instagram',
         'linkedin',
+        'father_income_bracket',
+        'mother_income_bracket',
     ];
 
     public const array CIVIL_STATUS_OPTIONS = [
@@ -26,6 +28,13 @@ final class FormTemplateService
         'widowed' => 'Widowed',
         'separated' => 'Separated',
         'annulled' => 'Annulled',
+    ];
+
+    public const array GENDER_OPTIONS = [
+        'male' => 'Male',
+        'female' => 'Female',
+        'other' => 'Other',
+        'prefer_not_to_say' => 'Prefer not to say',
     ];
 
     public const array NATIONALITY_OPTIONS = [
@@ -113,7 +122,7 @@ final class FormTemplateService
         'middle_name' => 'Enter your complete middle name, or leave this blank if you do not have one.',
         'last_name' => 'Use your official family name as it appears in your school records.',
         'suffix' => 'Add a suffix such as Jr. or III only if it is part of your legal name.',
-        'gender' => 'Choose the option that matches your official student record.',
+        'gender' => 'Choose the option that best represents your student record or preference.',
         'birth_date' => 'Enter the date shown on your birth certificate or school record.',
         'email' => 'Use an email address that you check regularly for school communication.',
         'phone' => 'Enter a phone number where the school can reach you. Include the country code when possible.',
@@ -139,9 +148,9 @@ final class FormTemplateService
         'is_magna_carta' => 'Choose Yes if you are a Magna Carta beneficiary.',
         'is_underprivileged' => 'Choose Yes if you are classified as underprivileged.',
         'is_first_generation' => 'Choose Yes if you are the first person in your family to attend college.',
-        'family_income_bracket' => 'Optional: choose one shared income range if both parents have the same income. If their incomes differ, leave this blank and choose the separate father and mother ranges below.',
-        'father_income_bracket' => 'Optional: choose your father’s income range only when it differs from your mother’s. Leave the family range blank.',
-        'mother_income_bracket' => 'Optional: choose your mother’s income range only when it differs from your father’s. Leave the family range blank.',
+        'family_income_bracket' => 'Optional: choose the annual income range that best represents your parents\' or household income.',
+        'father_income_bracket' => 'Legacy parent-specific income range retained for existing responses.',
+        'mother_income_bracket' => 'Legacy parent-specific income range retained for existing responses.',
         'emergency_contact_name' => 'Enter the name of someone the school may contact in an emergency.',
         'emergency_contact_phone' => 'Enter the emergency contact’s active phone number.',
         'emergency_contact_address' => 'Enter the emergency contact’s complete address.',
@@ -197,6 +206,7 @@ final class FormTemplateService
         'region_of_origin' => 'Select region of origin',
         'province_of_origin' => 'e.g. Laguna',
         'city_of_origin' => 'e.g. Calamba City',
+        'family_income_bracket' => 'Select annual parent or household income range',
         'indigenous_group' => 'Enter group name',
         'pwd_type' => 'Select disability type',
         'emergency_contact_name' => 'e.g. Maria Dela Cruz',
@@ -298,8 +308,7 @@ final class FormTemplateService
     {
         $description = self::PROFILE_DESCRIPTIONS[$key] ?? 'Enter the information as it should appear in your school record.';
         if ($this->isIncomeProfileField($key)) {
-            $mode = (string) config('income_brackets.default_mode', 'annual');
-            $description .= ' Income basis: '.config('income_brackets.modes.'.$mode.'.label', ucfirst($mode).' income').'.';
+            $description .= ' Income basis: '.config('income_brackets.modes.annual.label', 'Annual Income').'.';
         }
 
         return [
@@ -493,6 +502,7 @@ final class FormTemplateService
     public function defaultOptionsForProfileField(string $key): array
     {
         return match ($key) {
+            'gender' => self::GENDER_OPTIONS,
             'civil_status' => self::CIVIL_STATUS_OPTIONS,
             'nationality' => self::NATIONALITY_OPTIONS,
             'region_of_origin' => self::REGION_OPTIONS,
@@ -506,6 +516,7 @@ final class FormTemplateService
     public function isDropdownRecommendedProfileField(string $key): bool
     {
         return in_array($key, [
+            'gender',
             'civil_status',
             'nationality',
             'region_of_origin',
@@ -518,6 +529,10 @@ final class FormTemplateService
 
     private function optionsForProfileField(string $key, array $options): array
     {
+        if ($key === 'gender') {
+            return self::GENDER_OPTIONS;
+        }
+
         if ($this->isIncomeProfileField($key)) {
             return $this->incomeBracketOptions() ?: $options;
         }
@@ -531,8 +546,7 @@ final class FormTemplateService
 
     private function incomeBracketOptions(): array
     {
-        $mode = (string) config('income_brackets.default_mode', '');
-        $brackets = config('income_brackets.modes.'.$mode.'.brackets', []);
+        $brackets = config('income_brackets.modes.annual.brackets', []);
         if (! is_array($brackets)) {
             return [];
         }

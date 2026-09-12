@@ -30,7 +30,7 @@ use Modules\Forms\Services\FormResponseService;
 use Modules\Forms\Services\FormTemplateService;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-function reportingProfileDefinition(): array
+function reportingProfileDefinition(array $additionalKeys = []): array
 {
     config()->set('income_brackets', [
         'default_mode' => 'annual',
@@ -39,12 +39,18 @@ function reportingProfileDefinition(): array
             '250001_to_400k' => ['label' => '{symbol}250,001 - {symbol}400,000'],
         ]]],
     ]);
-    $keys = ['father_name', 'father_occupation', 'father_contact', 'father_email', 'mother_name', 'mother_occupation', 'mother_contact', 'mother_email', 'guardian_name', 'guardian_relationship', 'guardian_contact', 'guardian_email', 'family_address', 'family_income_bracket', 'father_income_bracket', 'mother_income_bracket', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_address', 'emergency_contact_relationship', 'is_solo_parent_dependent'];
+    $keys = array_values(array_unique([
+        'father_name', 'father_occupation', 'father_contact', 'father_email', 'mother_name', 'mother_occupation', 'mother_contact', 'mother_email', 'guardian_name', 'guardian_relationship', 'guardian_contact', 'guardian_email', 'family_address', 'family_income_bracket', 'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_address', 'emergency_contact_relationship', 'is_solo_parent_dependent',
+        ...$additionalKeys,
+    ]));
     $registry = Mockery::mock(FormsModelRegistry::class);
     $registry->shouldReceive('fields')->with('student')->andReturn(array_map(fn (string $key): array => [
         'key' => $key,
         'label' => $key,
-        'type' => $key === 'is_solo_parent_dependent' ? 'boolean' : (str_ends_with($key, '_email') ? 'email' : 'string'),
+        'type' => in_array($key, ['is_indigenous_person', 'is_pwd', 'is_solo_parent', 'is_solo_parent_dependent', 'is_senior_citizen', 'is_magna_carta', 'is_underprivileged', 'is_first_generation'], true)
+            ? 'boolean'
+            : ($key === 'gender' ? 'choice' : (str_ends_with($key, '_email') ? 'email' : 'string')),
+        'options' => $key === 'gender' ? ['male' => 'Male'] : [],
         'write_paths' => ['student.'.$key],
     ], $keys));
     app()->instance(FormsModelRegistry::class, $registry);
@@ -71,7 +77,7 @@ it('accepts a student profile with emergency contacts and no parent guardian or 
     expect(Validator::make(['answers' => $answers], $rules)->errors()->has('answers.emergency_contact_phone'))->toBeTrue();
 });
 
-it('keeps only the selected shared or separate income answers', function (array $answers, array $expected): void {
+it('keeps only the shared annual income answer', function (array $answers, array $expected): void {
     $definition = reportingProfileDefinition();
     $form = Form::factory()->create();
     foreach ($definition['fields'] as $position => $field) {
@@ -86,9 +92,7 @@ it('keeps only the selected shared or separate income answers', function (array 
     $response = app(FormResponseService::class)->submit($form, ['answers' => $answers]);
     expect(app(FormAnswerService::class)->latestAnswers($response))->toBe($expected);
 })->with([
-    'shared' => [['family_income_bracket' => 'below_250k', 'father_income_bracket' => '250001_to_400k'], ['family_income_bracket' => 'below_250k']],
-    'shared hides legacy parent text' => [['family_income_bracket' => 'below_250k', 'father_income_bracket' => 'legacy text'], ['family_income_bracket' => 'below_250k']],
-    'separate' => [['father_income_bracket' => 'below_250k', 'mother_income_bracket' => '250001_to_400k'], ['father_income_bracket' => 'below_250k', 'mother_income_bracket' => '250001_to_400k']],
+    'shared' => [['family_income_bracket' => 'below_250k'], ['family_income_bracket' => 'below_250k']],
     'unanswered' => [[], []],
 ]);
 
@@ -240,7 +244,7 @@ it('uses smart field types for built-in student profile fields', function (): vo
         ->and($fields[1]['type'])->toBe('textarea');
 });
 
-it('generates income bracket fields as selects from configured brackets', function (): void {
+it('generates one annual income bracket field as a select from configured brackets', function (): void {
     config()->set('income_brackets', [
         'default_mode' => 'annual',
         'modes' => [
@@ -262,20 +266,6 @@ it('generates income bracket fields as selects from configured brackets', functi
             'group' => 'Family',
             'write_paths' => ['details.family_income_bracket'],
         ],
-        [
-            'key' => 'father_income_bracket',
-            'label' => 'Father income bracket',
-            'type' => 'string',
-            'group' => 'Family',
-            'write_paths' => ['details.father_income_bracket'],
-        ],
-        [
-            'key' => 'mother_income_bracket',
-            'label' => 'Mother income bracket',
-            'type' => 'string',
-            'group' => 'Family',
-            'write_paths' => ['details.mother_income_bracket'],
-        ],
     ]);
     app()->instance(FormsModelRegistry::class, $registry);
 
@@ -283,16 +273,38 @@ it('generates income bracket fields as selects from configured brackets', functi
 
     expect(collect($definition['fields'])->pluck('type', 'field_key')->all())->toBe([
         'family_income_bracket' => 'select',
-        'father_income_bracket' => 'select',
-        'mother_income_bracket' => 'select',
     ])->and(collect($definition['fields'])->pluck('options', 'field_key')->all())->each->toBe([
         'below_250k' => '₱250,000 and below',
         '250001_to_400k' => '₱250,001 - ₱400,000',
     ])->and(collect($definition['fields'])->pluck('presentation.control', 'field_key')->all())->toBe([
         'family_income_bracket' => 'select',
-        'father_income_bracket' => 'select',
-        'mother_income_bracket' => 'select',
     ])->and($definition['fields'][0]['mapping'])->toBe(['model' => 'student', 'path' => 'details.family_income_bracket']);
+});
+
+it('generates the four gender choices and all approved equity fields', function (): void {
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('fields')->with('student')->andReturn([
+        ['key' => 'gender', 'label' => 'Gender', 'type' => 'choice', 'group' => 'Identity', 'options' => ['male' => 'Male'], 'write_paths' => ['student.gender']],
+        ...array_map(fn (string $key): array => [
+            'key' => $key,
+            'label' => $key,
+            'type' => in_array($key, ['is_indigenous_person', 'is_pwd', 'is_solo_parent', 'is_solo_parent_dependent', 'is_senior_citizen', 'is_magna_carta', 'is_underprivileged', 'is_first_generation'], true) ? 'boolean' : 'string',
+            'group' => 'Origin and Equity',
+            'write_paths' => ['student.'.$key],
+        ], ['ethnicity', 'region_of_origin', 'province_of_origin', 'city_of_origin', 'is_indigenous_person', 'indigenous_group', 'is_pwd', 'pwd_type', 'is_solo_parent', 'is_solo_parent_dependent', 'is_senior_citizen', 'is_magna_carta', 'is_underprivileged', 'is_first_generation']),
+    ]);
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $fields = collect(app(FormTemplateService::class)->definition('student_profile_completion')['fields'])->keyBy('field_key');
+
+    expect($fields['gender']['options'])->toBe(FormTemplateService::GENDER_OPTIONS)
+        ->and($fields['gender']['type'])->toBe('select')
+        ->and($fields->keys()->intersect([
+            'ethnicity', 'region_of_origin', 'province_of_origin', 'city_of_origin',
+            'is_indigenous_person', 'indigenous_group', 'is_pwd', 'pwd_type',
+            'is_solo_parent', 'is_solo_parent_dependent', 'is_senior_citizen',
+            'is_magna_carta', 'is_underprivileged', 'is_first_generation',
+        ])->count())->toBe(14);
 });
 
 it('keeps provided income options when bracket config is unavailable', function (): void {
@@ -530,6 +542,72 @@ it('upgrades saved student profile income bracket field definitions only', funct
         ->and($revision->refresh()->answer_payload)->toBe($answerPayload)
         ->and(app(FormAnswerService::class)->latestAnswers($response->refresh()))->toBe(['family_income_bracket' => 'below_250k'])
         ->and(DB::table('form_response_revisions')->count())->toBe(1);
+});
+
+it('updates existing profile forms and templates without changing responses', function (): void {
+    $definition = reportingProfileDefinition([
+        'gender', 'ethnicity', 'region_of_origin', 'province_of_origin', 'city_of_origin',
+        'is_indigenous_person', 'indigenous_group', 'is_pwd', 'pwd_type', 'is_solo_parent',
+        'is_senior_citizen', 'is_magna_carta', 'is_underprivileged', 'is_first_generation',
+    ]);
+    $form = Form::factory()->create([
+        'title' => 'Student Profile Completion',
+        'access_mode' => FormAccessMode::Invitation,
+        'settings' => [
+            'template_key' => 'student_profile_completion',
+            'mapping_mode' => 'review',
+        ],
+    ]);
+    $form->fields()->createMany([
+        ['field_key' => 'gender', 'label' => 'Custom gender', 'type' => 'text', 'options' => ['male' => 'Male'], 'position' => 1, 'mapping' => ['model' => 'student', 'path' => 'student.gender'], 'presentation' => ['unit' => 'custom']],
+        ['field_key' => 'family_income_bracket', 'label' => 'Custom income', 'type' => 'text', 'position' => 2, 'mapping' => ['model' => 'student', 'path' => 'student.family_income_bracket']],
+        ['field_key' => 'father_income_bracket', 'label' => 'Father income', 'type' => 'text', 'position' => 3, 'mapping' => ['model' => 'student', 'path' => 'student.father_income_bracket']],
+    ]);
+    $template = FormTemplate::query()->create([
+        'name' => 'Saved profile',
+        'model_key' => 'student',
+        'definition' => [
+            'settings' => ['template_key' => 'student_profile_completion'],
+            'fields' => [
+                ['field_key' => 'gender', 'label' => 'Gender', 'type' => 'text', 'options' => ['male' => 'Male'], 'mapping' => ['model' => 'student', 'path' => 'student.gender']],
+                ['field_key' => 'father_income_bracket', 'label' => 'Father income', 'type' => 'text'],
+            ],
+        ],
+    ]);
+    $response = app(FormResponseService::class)->submit($form, ['answers' => ['gender' => 'male']]);
+    $payload = app(FormAnswerService::class)->latestAnswers($response);
+
+    $migration = include dirname(__DIR__, 2).'/database/migrations/2026_09_12_000001_update_student_profile_form_demographics_and_income.php';
+    $migration->up();
+    $firstRun = $form->fresh('fields')->fields->keyBy('field_key');
+    $migration->up();
+    $secondRun = $form->fresh('fields')->fields->keyBy('field_key');
+    expect($firstRun)->toHaveKeys(['gender', 'family_income_bracket', 'father_income_bracket'])
+        ->and($firstRun)->toHaveKeys(['is_indigenous_person', 'is_pwd', 'is_solo_parent', 'is_solo_parent_dependent', 'is_senior_citizen', 'is_magna_carta', 'is_underprivileged', 'is_first_generation'])
+        ->and($firstRun['gender']->options)->toBe(FormTemplateService::GENDER_OPTIONS)
+        ->and($firstRun['gender']->presentation['unit'])->toBe('custom')
+        ->and($firstRun['family_income_bracket']->type)->toBe('select')
+        ->and($firstRun['family_income_bracket']->presentation['control'])->toBe('select')
+        ->and($firstRun['father_income_bracket']->behavior['retired'])->toBeTrue()
+        ->and($firstRun)->toHaveCount($secondRun->count())
+        ->and($secondRun['gender']->options)->toBe($firstRun['gender']->options)
+        ->and(collect($template->fresh()->definition['fields'])->pluck('field_key')->all())->not->toContain('father_income_bracket')
+        ->and($payload)->toBe(['gender' => 'male']);
+});
+
+it('does not expose retired fields in new submissions while preserving their mappings', function (): void {
+    $form = Form::factory()->create();
+    $form->fields()->createMany([
+        ['field_key' => 'family_income_bracket', 'label' => 'Family income', 'type' => 'select', 'options' => ['below_250k' => 'Below'], 'position' => 1],
+        ['field_key' => 'father_income_bracket', 'label' => 'Father income', 'type' => 'select', 'options' => ['below_250k' => 'Below'], 'position' => 2, 'behavior' => ['retired' => true]],
+    ]);
+    $form->load('fields');
+    $definitions = app(FormDefinitionService::class);
+
+    expect(collect($definitions->publicPayload($form)['fields'])->pluck('key')->all())->toBe(['family_income_bracket'])
+        ->and($definitions->validationRules($form))->not->toHaveKey('answers.father_income_bracket')
+        ->and($definitions->normalizeAnswers($form, ['father_income_bracket' => 'below_250k']))->toBe([])
+        ->and($definitions->snapshot($form))->toHaveCount(1);
 });
 
 it('hydrates built-in profile help text for the editor when old forms have empty values', function (): void {
