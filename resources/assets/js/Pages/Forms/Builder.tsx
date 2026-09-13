@@ -91,6 +91,7 @@ interface FormData {
   settings: {
     allow_resubmit: boolean;
     allow_unverified_guest_response?: boolean;
+    allow_authenticated_guest_prefill?: boolean;
     confirmation_message?: string;
     mapping_mode?: string;
     invitation_expiry_days?: number;
@@ -179,6 +180,8 @@ function initialData(form: Props["form"]): FormData {
         form?.settings?.allow_unverified_guest_response ??
         (form?.access_mode === "guest_identifier" &&
           form?.identity_type === "student_id"),
+      allow_authenticated_guest_prefill:
+        form?.settings?.allow_authenticated_guest_prefill ?? true,
       confirmation_message: form?.settings?.confirmation_message ?? "",
       mapping_mode: form?.settings?.mapping_mode ?? "review",
       invitation_expiry_days: Number(
@@ -1613,6 +1616,32 @@ export default function FormsBuilder({
                           </span>
                         </span>
                       </label>
+                      {formState.data.access_mode === "guest_identifier" &&
+                        formState.data.identity_type === "student_id" && (
+                          <label className="border-border/70 bg-muted/20 hover:bg-muted/40 flex cursor-pointer items-start gap-3 rounded-lg border p-4 md:col-span-2">
+                            <Switch
+                              checked={
+                                formState.data.settings
+                                  .allow_authenticated_guest_prefill ?? true
+                              }
+                              onCheckedChange={(checked) =>
+                                updateSettings({
+                                  allow_authenticated_guest_prefill: checked,
+                                })
+                              }
+                            />
+                            <span>
+                              <span className="block text-sm font-medium">
+                                Offer portal profile prefill
+                              </span>
+                              <span className="text-muted-foreground mt-1 block text-xs leading-5">
+                                When a signed-in portal user has a linked
+                                student record, ask whether to use it instead of
+                                showing the Student ID lookup first.
+                              </span>
+                            </span>
+                          </label>
+                        )}
                       <Field className="md:col-span-2">
                         <Label htmlFor="confirmation-message">
                           Confirmation message
