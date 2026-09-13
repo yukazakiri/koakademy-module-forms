@@ -1,13 +1,7 @@
 import AdminLayout from "@/components/administrators/admin-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import formsRoutes from "@/routes/administrators/forms";
 import type { User } from "@/types/user";
 import { Head, Link, router } from "@inertiajs/react";
@@ -49,6 +43,16 @@ function value(value: unknown): string {
 function needsManualReview(response: Props["responses"][number]): boolean {
   return response.links.some(
     (link) => link.status === "unmatched" || link.model_id === null,
+  );
+}
+
+function respondentLabel(response: Props["responses"][number]): string {
+  return (
+    response.respondent_email ||
+    response.respondent_identifier ||
+    (response.respondent_user_id
+      ? `User ${response.respondent_user_id}`
+      : "Anonymous respondent")
   );
 }
 
@@ -96,111 +100,163 @@ export default function FormsResponses({ user, form, responses }: Props) {
             </CardContent>
           </Card>
         ) : (
-          <div className="flex flex-col gap-4">
-            {responses.map((response) => {
-              const manualReview = needsManualReview(response);
-
-              return (
-                <Card
-                  key={response.id}
-                  className="border-border/70 overflow-hidden"
-                >
-                <CardHeader className="bg-muted/20 flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      {response.respondent_email ||
-                        response.respondent_identifier ||
-                        (response.respondent_user_id
-                          ? `User ${response.respondent_user_id}`
-                          : "Anonymous respondent")}
-                      {response.status === "applied" && (
-                        <CheckCircle2
-                          className="size-4 text-emerald-600"
-                          aria-label="Applied"
-                        />
-                      )}
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      Submitted{" "}
-                      {response.submitted_at
-                        ? new Date(response.submitted_at).toLocaleString()
-                        : "—"}{" "}
-                      · Revision {response.latest_revision}
-                    </CardDescription>
-                  </div>
-                  <Badge
-                    variant={
-                      response.status === "applied"
-                        ? "default"
-                        : manualReview
-                          ? "destructive"
-                          : "outline"
-                    }
-                  >
-                    {manualReview ? "manual review" : response.status}
-                  </Badge>
-                </CardHeader>
-                <CardContent className="space-y-5 p-5">
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {form.fields.map((field) => (
-                      <div
-                        key={field.field_key}
-                        className="border-border/70 rounded-lg border p-3"
-                      >
-                        <p className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
-                          {field.label}{" "}
-                          {field.is_sensitive && (
-                            <ShieldAlert
-                              className="size-3"
-                              aria-label="Sensitive"
-                            />
-                          )}
-                        </p>
-                        <p className="mt-1 text-sm break-words">
-                          {value(response.answers[field.field_key])}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  {response.links.length > 0 && (
-                    <div className="border-border/70 bg-muted/20 rounded-lg border p-4 text-sm">
-                      <p className="font-medium">Record links</p>
-                      <div className="text-muted-foreground mt-2 flex flex-wrap gap-3 text-xs">
-                        {response.links.map((link) => (
-                          <span key={link.model_key}>
-                            {link.model_key}: {link.model_id ?? link.status}
+          <Card className="border-border/70 overflow-hidden">
+            <CardHeader className="bg-muted/20 flex flex-col gap-2 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div>
+                <CardTitle className="text-base">
+                  Response spreadsheet
+                </CardTitle>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {responses.length} submission
+                  {responses.length === 1 ? "" : "s"} · Scroll horizontally to
+                  review every answer.
+                </p>
+              </div>
+              <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1">
+                  <ShieldAlert className="size-3" /> Sensitive fields are marked
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[68rem] border-collapse text-sm">
+                  <caption className="sr-only">
+                    Submitted responses for {form.title}
+                  </caption>
+                  <thead>
+                    <tr className="bg-muted/40 border-b text-left">
+                      <th className="text-muted-foreground sticky left-0 z-20 min-w-56 border-r bg-muted/40 px-4 py-3 text-xs font-semibold tracking-wide uppercase">
+                        Respondent
+                      </th>
+                      <th className="text-muted-foreground min-w-44 border-r px-4 py-3 text-xs font-semibold tracking-wide uppercase">
+                        Submitted
+                      </th>
+                      <th className="text-muted-foreground min-w-28 border-r px-4 py-3 text-xs font-semibold tracking-wide uppercase">
+                        Status
+                      </th>
+                      {form.fields.map((field) => (
+                        <th
+                          key={field.field_key}
+                          className="text-muted-foreground min-w-48 max-w-72 border-r px-4 py-3 text-xs font-semibold tracking-wide uppercase"
+                          title={field.label}
+                        >
+                          <span className="flex items-center gap-1">
+                            <span className="truncate">{field.label}</span>
+                            {field.is_sensitive && (
+                              <ShieldAlert
+                                className="size-3 shrink-0"
+                                aria-label="Sensitive"
+                              />
+                            )}
                           </span>
-                        ))}
-                    </div>
-                      {manualReview && (
-                        <p className="mt-3 text-xs text-amber-700">
-                          No matching student record was found. Review the submitted Student ID and email manually before updating any record.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {response.status !== "applied" && !manualReview && (
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => apply(response.id, false)}
-                      >
-                        Apply blank fields only
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => apply(response.id, true)}
-                      >
-                        Apply and overwrite
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                        </th>
+                      ))}
+                      <th className="text-muted-foreground min-w-64 px-4 py-3 text-xs font-semibold tracking-wide uppercase">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {responses.map((response, index) => {
+                      const manualReview = needsManualReview(response);
+                      const rowLabel = respondentLabel(response);
+
+                      return (
+                        <tr
+                          key={response.id}
+                          className={`border-b last:border-b-0 ${index % 2 === 1 ? "bg-muted/10" : "bg-background"}`}
+                        >
+                          <th className="text-foreground sticky left-0 z-10 min-w-56 border-r bg-inherit px-4 py-4 text-left align-top font-medium">
+                            <div className="flex items-start gap-2">
+                              <span className="max-w-48 break-words">
+                                {rowLabel}
+                              </span>
+                              {response.status === "applied" && (
+                                <CheckCircle2
+                                  className="mt-0.5 size-4 shrink-0 text-emerald-600"
+                                  aria-label="Applied"
+                                />
+                              )}
+                            </div>
+                            <p className="text-muted-foreground mt-1 text-xs">
+                              Revision {response.latest_revision}
+                            </p>
+                          </th>
+                          <td className="text-muted-foreground min-w-44 border-r px-4 py-4 align-top text-xs whitespace-nowrap">
+                            {response.submitted_at
+                              ? new Date(response.submitted_at).toLocaleString()
+                              : "—"}
+                          </td>
+                          <td className="min-w-28 border-r px-4 py-4 align-top">
+                            <Badge
+                              variant={
+                                response.status === "applied"
+                                  ? "default"
+                                  : manualReview
+                                    ? "destructive"
+                                    : "outline"
+                              }
+                            >
+                              {manualReview ? "manual review" : response.status}
+                            </Badge>
+                          </td>
+                          {form.fields.map((field) => (
+                            <td
+                              key={field.field_key}
+                              className="max-w-72 border-r px-4 py-4 align-top break-words"
+                            >
+                              <span className="line-clamp-4">
+                                {value(response.answers[field.field_key])}
+                              </span>
+                            </td>
+                          ))}
+                          <td className="min-w-64 px-4 py-4 align-top">
+                            <div className="flex flex-wrap gap-2">
+                              {response.status !== "applied" &&
+                                !manualReview && (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => apply(response.id, false)}
+                                    >
+                                      Apply blanks
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => apply(response.id, true)}
+                                    >
+                                      Overwrite
+                                    </Button>
+                                  </>
+                                )}
+                              {manualReview && (
+                                <span className="text-muted-foreground max-w-56 text-xs leading-5">
+                                  Verify the submitted identity manually before
+                                  updating a record.
+                                </span>
+                              )}
+                              {response.links.length > 0 && (
+                                <span className="text-muted-foreground w-full text-xs">
+                                  {response.links
+                                    .map(
+                                      (link) =>
+                                        `${link.model_key}: ${link.model_id ?? link.status}`,
+                                    )
+                                    .join(" · ")}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </AdminLayout>
