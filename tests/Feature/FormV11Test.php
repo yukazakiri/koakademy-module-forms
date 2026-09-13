@@ -243,6 +243,31 @@ it('does not offer authenticated profile prefill when the form setting is disabl
     expect($payload['props']['authenticated_guest_profile'])->toBeNull();
 });
 
+it('enables authenticated profile prefill for legacy guest identifier forms by default', function (): void {
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $student = new stdClass;
+    $student->student_id = '2026-0002';
+    $student->email = 'legacy@example.test';
+    $student->first_name = 'Grace';
+    $student->last_name = 'Hopper';
+    $registry->shouldReceive('resolveForUser')->with('student', Mockery::type(stdClass::class))->andReturn($student);
+    $registry->shouldReceive('read')->andReturnUsing(fn (object $record, string $path): mixed => data_get($record, str_replace('student.', '', $path)));
+    app()->instance(FormsModelRegistry::class, $registry);
+
+    $form = Form::factory()->create([
+        'access_mode' => FormAccessMode::GuestIdentifier,
+        'identity_type' => 'student_id',
+        'settings' => [],
+    ]);
+    $request = Request::create(route('forms.show', ['form' => $form]), 'GET');
+    $request->headers->set('X-Inertia', 'true');
+    $request->setUserResolver(fn (): object => (object) ['id' => 100]);
+
+    $payload = json_decode(app(PublicFormController::class)->show($request, $form)->toResponse($request)->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($payload['props']['authenticated_guest_profile']['student_id'])->toBe('2026-0002');
+});
+
 it('generates the built-in student template from approved host fields', function (): void {
     $registry = Mockery::mock(FormsModelRegistry::class);
     $registry->shouldReceive('fields')->with('student')->andReturn([

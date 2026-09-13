@@ -48,7 +48,7 @@ final class PublicFormController
         if (! $request->user()
             || $form->access_mode !== FormAccessMode::GuestIdentifier
             || $form->identity_type !== 'student_id'
-            || data_get($form->settings, 'allow_authenticated_guest_prefill') !== true) {
+            || data_get($form->settings, 'allow_authenticated_guest_prefill', true) !== true) {
             return null;
         }
 
