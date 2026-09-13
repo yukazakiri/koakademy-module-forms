@@ -2,6 +2,12 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.9.0 - 2026-09-13
+
+- Replaced the response-card layout with a spreadsheet-style review table.
+- Kept respondent, submission time, status, answers, record links, and apply actions visible by row.
+- Added sticky respondent and header columns with horizontal scrolling for wide forms.
+
 ## 1.8.0 - 2026-09-12
 
 - Added Philippine-only student profile controls based on the form's owning school country.
