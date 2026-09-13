@@ -2,6 +2,12 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.0 - 2026-09-13
+
+- Offered authenticated portal users their linked student profile on public guest Student ID and registered email forms.
+- Required an explicit choice before prefilling the profile or continuing with manual record lookup.
+- Added an administrator setting to disable authenticated guest profile prefill.
+
 ## 1.9.0 - 2026-09-13
 
 - Replaced the response-card layout with a spreadsheet-style review table.
