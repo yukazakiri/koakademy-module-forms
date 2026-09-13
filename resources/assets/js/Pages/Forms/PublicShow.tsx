@@ -63,6 +63,13 @@ interface Props {
   form: FormDefinition;
   authenticated: boolean;
   user: { name?: string; email?: string } | null;
+  authenticated?: boolean;
+  authenticated_guest_profile?: {
+    name?: string;
+    student_id?: string;
+    email?: string;
+    answers: Record<string, unknown>;
+  } | null;
   preview?: boolean;
   invitation_token?: string;
   invitation?: { expires_at: string | null; student_name: string | null };
@@ -168,6 +175,7 @@ export default function PublicFormShow({
   preview = false,
   invitation_token,
   invitation,
+  authenticated_guest_profile,
 }: Props) {
   const formState = useForm<{
     respondent_email: string;
@@ -195,10 +203,17 @@ export default function PublicFormShow({
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identityFallbackAvailable, setIdentityFallbackAvailable] =
     useState(false);
+  const [useAuthenticatedProfile, setUseAuthenticatedProfile] = useState<
+    boolean | null
+  >(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageError, setPageError] = useState<string | null>(null);
   const formLocked =
-    requiresStudentVerification && !identityVerified && !identityUnverified;
+    requiresStudentVerification &&
+    !identityVerified &&
+    !identityUnverified &&
+    useAuthenticatedProfile !== true;
+  const canUseAuthenticatedProfile = Boolean(authenticated_guest_profile);
   const isStudentProfileForm =
     form.settings?.template_key === "student_profile_completion";
   const usesPhilippineProfileLocationControls =
@@ -248,6 +263,36 @@ export default function PublicFormShow({
       Math.min(current, Math.max(sections.length - 1, 0)),
     );
   }, [sections.length]);
+
+  useEffect(() => {
+    if (useAuthenticatedProfile !== true || !authenticated_guest_profile) {
+      return;
+    }
+
+    formState.setData(
+      "respondent_identifier",
+      authenticated_guest_profile.student_id ?? "",
+    );
+    formState.setData(
+      "respondent_email",
+      authenticated_guest_profile.email ?? user?.email ?? "",
+    );
+    formState.setData("answers", authenticated_guest_profile.answers ?? {});
+    setIdentityVerified(true);
+    setIdentityUnverified(false);
+    setIdentityError(null);
+    setIdentityFallbackAvailable(false);
+  }, [authenticated_guest_profile, useAuthenticatedProfile, user?.email]);
+
+  function chooseAuthenticatedProfile(useProfile: boolean): void {
+    setUseAuthenticatedProfile(useProfile);
+    if (!useProfile) {
+      setIdentityVerified(false);
+      formState.setData("respondent_identifier", "");
+      formState.setData("answers", {});
+      return;
+    }
+  }
 
   function setAnswer(key: string, value: unknown): void {
     setPageError(null);
@@ -577,7 +622,47 @@ export default function PublicFormShow({
           <form onSubmit={submit} className="flex flex-col gap-5">
             {form.access_mode === "guest_identifier" && (
               <section className="border-primary/20 bg-card rounded-xl border p-5 shadow-sm sm:p-6">
-                {form.identity_type === "student_id" ? (
+                {form.identity_type === "student_id" &&
+                canUseAuthenticatedProfile &&
+                useAuthenticatedProfile === null ? (
+                  <div className="flex flex-col gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-xs font-semibold">
+                          0
+                        </span>
+                        <p className="text-sm font-semibold">
+                          Use your portal profile?
+                        </p>
+                      </div>
+                      <p className="text-muted-foreground mt-2 pl-9 text-xs leading-5">
+                        You are signed in as{" "}
+                        {authenticated_guest_profile?.name ||
+                          user?.name ||
+                          user?.email}
+                        . We can use your linked student record and prefill this
+                        form. You can review and change the answers before
+                        submitting.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        type="button"
+                        onClick={() => chooseAuthenticatedProfile(true)}
+                      >
+                        Use my profile
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => chooseAuthenticatedProfile(false)}
+                      >
+                        Enter details manually
+                      </Button>
+                    </div>
+                  </div>
+                ) : form.identity_type === "student_id" &&
+                  useAuthenticatedProfile !== true ? (
                   <div className="flex flex-col gap-4">
                     <div>
                       <div className="flex items-center gap-2">
@@ -699,6 +784,31 @@ export default function PublicFormShow({
                         </p>
                       </div>
                     )}
+                  </div>
+                ) : form.identity_type === "student_id" ? (
+                  <div className="border-emerald-500/30 bg-emerald-500/5 flex flex-col gap-3 rounded-lg border p-4">
+                    <div>
+                      <p className="text-sm font-semibold">
+                        Portal profile selected
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-xs leading-5">
+                        {authenticated_guest_profile?.name ||
+                          user?.name ||
+                          "Your linked student record"}{" "}
+                        ·{" "}
+                        {authenticated_guest_profile?.student_id ||
+                          "Student ID"}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-fit"
+                      onClick={() => chooseAuthenticatedProfile(false)}
+                    >
+                      Use another record
+                    </Button>
                   </div>
                 ) : (
                   <label

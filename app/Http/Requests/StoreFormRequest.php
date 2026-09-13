@@ -29,6 +29,7 @@ class StoreFormRequest extends FormRequest
             'settings' => ['nullable', 'array'],
             'settings.allow_resubmit' => ['nullable', 'boolean'],
             'settings.allow_unverified_guest_response' => ['nullable', 'boolean'],
+            'settings.allow_authenticated_guest_prefill' => ['nullable', 'boolean'],
             'settings.mapping_mode' => ['nullable', Rule::in(['review', 'auto_fill_empty'])],
             'settings.invitation_expiry_days' => ['nullable', 'integer', 'min:1', 'max:90'],
             'fields' => ['required', 'array', 'min:1', 'max:100'],
