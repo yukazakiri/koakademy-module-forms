@@ -2,6 +2,13 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.8 - 2026-09-14
+
+- Prevented Enter key from triggering premature form submission on multi-step forms before the final page.
+- Automatically unlocked unmatched guest verification forms for manual review when no student record matches.
+- Relaxed optional parent, guardian, and education field requirements on student profile forms.
+- Added response status updates, deletion, and reviewed-response student record creation.
+
 ## 1.10.7 - 2026-09-14
 
 - Align the module manifest with the merged multi-step form navigation fix.
