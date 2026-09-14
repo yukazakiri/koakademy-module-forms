@@ -2,6 +2,10 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.7 - 2026-09-14
+
+- Align the module manifest with the merged multi-step form navigation fix.
+
 ## 1.10.6 - 2026-09-14
 
 - Align the module manifest with the merged form-navigation and response-management implementation.
