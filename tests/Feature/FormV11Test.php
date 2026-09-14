@@ -1064,3 +1064,39 @@ it('applies only blank mapped fields and audits skipped populated fields', funct
         ->and($values['student.phone'])->toBe('already populated')
         ->and($audit?->metadata['fields_skipped'])->toContain('phone');
 });
+
+it('relaxes optional parent, guardian, and education field requirements on student profile forms', function (): void {
+    $form = Form::factory()->create([
+        'settings' => ['template_key' => 'student_profile_completion'],
+    ]);
+    $form->fields()->createMany([
+        ['field_key' => 'first_name', 'label' => 'First Name', 'type' => 'text', 'required' => true, 'position' => 1],
+        ['field_key' => 'father_name', 'label' => 'Father Name', 'type' => 'text', 'required' => true, 'position' => 2],
+        ['field_key' => 'guardian_name', 'label' => 'Guardian Name', 'type' => 'text', 'required' => true, 'position' => 3],
+        ['field_key' => 'elementary_school', 'label' => 'Elementary School', 'type' => 'text', 'required' => true, 'position' => 4],
+    ]);
+
+    $template = FormTemplate::query()->create([
+        'name' => 'Student Profile Completion',
+        'model_key' => 'student',
+        'definition' => [
+            'settings' => ['template_key' => 'student_profile_completion'],
+            'fields' => [
+                ['field_key' => 'first_name', 'required' => true],
+                ['field_key' => 'father_name', 'required' => true],
+            ],
+        ],
+    ]);
+
+    $migration = include dirname(__DIR__, 2).'/database/migrations/2026_09_14_000001_relax_optional_student_profile_fields.php';
+    $migration->up();
+    $migration->up();
+
+    $fields = $form->fresh('fields')->fields->keyBy('field_key');
+
+    expect($fields['first_name']->required)->toBeTrue()
+        ->and($fields['father_name']->required)->toBeFalse()
+        ->and($fields['guardian_name']->required)->toBeFalse()
+        ->and($fields['elementary_school']->required)->toBeFalse()
+        ->and(collect($template->fresh()->definition['fields'])->firstWhere('field_key', 'father_name')['required'])->toBeFalse();
+});

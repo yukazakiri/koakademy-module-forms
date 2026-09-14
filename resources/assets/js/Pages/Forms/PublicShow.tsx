@@ -301,6 +301,7 @@ export default function PublicFormShow({
 
   function goToNextPage(event?: React.MouseEvent<HTMLButtonElement>): void {
     event?.preventDefault();
+    event?.stopPropagation();
     const missingField = activeFields.find(
       (field) => field.required && !filled(formState.data.answers[field.key]),
     );
@@ -367,21 +368,26 @@ export default function PublicFormShow({
       formState.setData("answers", response.data.answers ?? {});
       setIdentityVerified(response.data.matched === true);
     } catch (error) {
+      const isUnmatched =
+        axios.isAxiosError(error) && error.response?.status === 422;
       setIdentityVerified(false);
-      setIdentityUnverified(false);
-      formState.setData("respondent_identity_unverified", false);
+      setIdentityUnverified(isUnmatched && allowUnverifiedGuestResponse);
+      formState.setData(
+        "respondent_identity_unverified",
+        isUnmatched && allowUnverifiedGuestResponse,
+      );
       formState.setData("answers", {});
       const responseErrors = axios.isAxiosError<{
         errors?: Record<string, string[]>;
       }>(error)
         ? error.response?.data?.errors
         : undefined;
-      setIdentityFallbackAvailable(
-        axios.isAxiosError(error) && error.response?.status === 422,
-      );
+      setIdentityFallbackAvailable(isUnmatched);
       setIdentityError(
-        responseErrors?.respondent_identifier?.[0] ??
-          "We could not verify those details. Please check your Student ID and registered email.",
+        isUnmatched && allowUnverifiedGuestResponse
+          ? "No matching student record was found. You can still complete this form — it will be saved for manual review by school staff."
+          : (responseErrors?.respondent_identifier?.[0] ??
+              "We could not verify those details. Please check your Student ID and registered email."),
       );
     } finally {
       setIdentityLoading(false);
@@ -620,7 +626,20 @@ export default function PublicFormShow({
             )}
           </div>
 
-          <form onSubmit={submit} className="flex flex-col gap-5">
+          <form
+            onSubmit={submit}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !isLastPage &&
+                (event.target as HTMLElement).tagName !== "TEXTAREA"
+              ) {
+                event.preventDefault();
+                goToNextPage();
+              }
+            }}
+            className="flex flex-col gap-5"
+          >
             {form.access_mode === "guest_identifier" && (
               <section className="border-primary/20 bg-card rounded-xl border p-5 shadow-sm sm:p-6">
                 {form.identity_type === "student_id" &&
@@ -1176,7 +1195,11 @@ export default function PublicFormShow({
                   <Button
                     type="button"
                     size="lg"
-                    onClick={goToNextPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      goToNextPage(event);
+                    }}
                     disabled={preview || formLocked}
                   >
                     Continue
