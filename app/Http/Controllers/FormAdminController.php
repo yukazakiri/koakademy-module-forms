@@ -167,6 +167,53 @@ final class FormAdminController
         return back()->with('success', 'Approved answers were applied to the linked record.');
     }
 
+    public function updateResponse(Request $request, Form $form, FormResponse $response): RedirectResponse
+    {
+        $this->authorize($request, 'responses.manage');
+        $this->ensureTenant($form);
+        abort_unless($response->form_id === $form->getKey(), 404);
+
+        $validated = $request->validate([
+            'review_notes' => ['nullable', 'string', 'max:10000'],
+            'status' => ['nullable', 'in:submitted,reviewed,rejected'],
+        ]);
+
+        $response->update([
+            'review_notes' => $validated['review_notes'] ?? null,
+            'status' => $validated['status'] ?? $response->status->value,
+            'reviewed_by' => $request->user()?->getAuthIdentifier(),
+            'reviewed_at' => now(),
+        ]);
+        $this->audit->record($form, 'response_updated', $response, [
+            'status' => $response->status->value,
+        ]);
+
+        return back()->with('success', 'Response updated successfully.');
+    }
+
+    public function destroyResponse(Request $request, Form $form, FormResponse $response): RedirectResponse
+    {
+        $this->authorize($request, 'responses.manage');
+        $this->ensureTenant($form);
+        abort_unless($response->form_id === $form->getKey(), 404);
+
+        $response->delete();
+        $this->audit->record($form, 'response_deleted', metadata: ['response_id' => $response->getKey()]);
+
+        return back()->with('success', 'Response deleted successfully.');
+    }
+
+    public function createResponseRecord(Request $request, Form $form, FormResponse $response): RedirectResponse
+    {
+        $this->authorize($request, 'responses.manage');
+        $this->ensureTenant($form);
+        abort_unless($response->form_id === $form->getKey(), 404);
+
+        $this->mapping->createLinkedRecord($response, $request->user());
+
+        return back()->with('success', 'Student record created from the response.');
+    }
+
     public function export(Request $request, Form $form): StreamedResponse
     {
         $this->authorize($request, 'export');
@@ -288,7 +335,7 @@ final class FormAdminController
     /** @return array<string, bool> */
     private function permissions(mixed $user): array
     {
-        return collect(['create', 'update', 'publish', 'responses', 'export', 'apply', 'invitations.view', 'invitations.create'])
+        return collect(['create', 'update', 'publish', 'responses', 'responses.manage', 'export', 'apply', 'invitations.view', 'invitations.create'])
             ->mapWithKeys(fn (string $ability): array => [$ability => $this->authorization->allows($user, $ability)])
             ->all();
     }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Modules\Forms\Services;
 
 use Modules\Forms\Contracts\FormsModelRegistry;
+use Modules\Forms\Models\Form;
+use Modules\Forms\Models\FormResponse;
 
 final class NullFormsModelRegistry implements FormsModelRegistry
 {
@@ -41,4 +43,9 @@ final class NullFormsModelRegistry implements FormsModelRegistry
     public function write(object $record, string $path, mixed $value): void {}
 
     public function persist(object $record): void {}
+
+    public function createFromResponse(Form $form, FormResponse $response): ?object
+    {
+        return null;
+    }
 }

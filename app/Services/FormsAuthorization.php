@@ -13,6 +13,7 @@ final class FormsAuthorization
         'update' => ['forms.update', 'Update:Form'],
         'publish' => ['forms.publish', 'Publish:Form'],
         'responses' => ['forms.responses.view', 'ViewAny:FormResponse'],
+        'responses.manage' => ['forms.responses.manage', 'Manage:FormResponse'],
         'export' => ['forms.responses.export', 'Export:FormResponse'],
         'apply' => ['forms.mappings.apply', 'Apply:FormResponseMapping'],
         'templates.view' => ['forms.templates.view', 'ViewAny:FormTemplate'],

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Modules\Forms\Contracts;
 
+use Modules\Forms\Models\Form;
+use Modules\Forms\Models\FormResponse;
+
 interface FormsModelRegistry
 {
     /** @return list<array{key: string, label: string}> */
@@ -23,4 +26,7 @@ interface FormsModelRegistry
     public function write(object $record, string $path, mixed $value): void;
 
     public function persist(object $record): void;
+
+    /** Create a host record from an unmatched form response. */
+    public function createFromResponse(Form $form, FormResponse $response): ?object;
 }

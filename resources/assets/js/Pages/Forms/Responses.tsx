@@ -30,6 +30,7 @@ interface Props {
       error_message: string | null;
     }[];
   }[];
+  permissions?: { responses_manage?: boolean };
 }
 
 function value(value: unknown): string {
@@ -56,11 +57,48 @@ function respondentLabel(response: Props["responses"][number]): string {
   );
 }
 
-export default function FormsResponses({ user, form, responses }: Props) {
+export default function FormsResponses({
+  user,
+  form,
+  responses,
+  permissions,
+}: Props) {
+  const canManageResponses = permissions?.responses_manage === true;
+
   function apply(responseId: string, overwrite: boolean): void {
     router.post(
       formsRoutes.responses.apply.url({ form: form.id, response: responseId }),
       { overwrite },
+      { preserveScroll: true },
+    );
+  }
+
+  function createRecord(responseId: string): void {
+    router.post(
+      formsRoutes.responses.createRecord.url({
+        form: form.id,
+        response: responseId,
+      }),
+      {},
+      { preserveScroll: true },
+    );
+  }
+
+  function updateResponse(responseId: string, status: string): void {
+    router.put(
+      formsRoutes.responses.update.url({ form: form.id, response: responseId }),
+      { status },
+      { preserveScroll: true },
+    );
+  }
+
+  function deleteResponse(responseId: string): void {
+    if (!window.confirm("Delete this response permanently?")) {
+      return;
+    }
+
+    router.delete(
+      formsRoutes.responses.delete.url({ form: form.id, response: responseId }),
       { preserveScroll: true },
     );
   }
@@ -231,6 +269,37 @@ export default function FormsResponses({ user, form, responses }: Props) {
                                     </Button>
                                   </>
                                 )}
+                              {manualReview && canManageResponses && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => createRecord(response.id)}
+                                >
+                                  Create student record
+                                </Button>
+                              )}
+                              {canManageResponses &&
+                                response.status !== "applied" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      updateResponse(response.id, "reviewed")
+                                    }
+                                  >
+                                    Mark reviewed
+                                  </Button>
+                                )}
+                              {canManageResponses && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => deleteResponse(response.id)}
+                                >
+                                  Delete
+                                </Button>
+                              )}
                               {manualReview && (
                                 <span className="text-muted-foreground max-w-56 text-xs leading-5">
                                   Verify the submitted identity manually before
