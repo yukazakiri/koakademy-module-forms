@@ -2,6 +2,11 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.2 - 2026-09-14
+
+- Fixed form submissions failing with a 500 TypeError when an authenticated user object has an integer ID.
+- Cast student ID queries safely to text so non-numeric or dashed identifier lookups on PostgreSQL do not trigger invalid syntax errors.
+
 ## 1.10.0 - 2026-09-13
 
 - Offered authenticated portal users their linked student profile on public guest Student ID and registered email forms.

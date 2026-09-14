@@ -43,6 +43,7 @@ final class FormResponseService
             : $this->normalizeIdentifier($validated['respondent_email'] ?? null);
         $identifier = $this->normalizeIdentifier($validated['respondent_identifier'] ?? null);
         $userId = data_get($user, 'id');
+        $userId = $userId === null ? null : (string) $userId;
         $identityUnverified = (bool) ($validated['respondent_identity_unverified'] ?? false);
         $guestRecord = $this->resolveGuestRecord($form, $identifier, $email, $identityUnverified);
 
