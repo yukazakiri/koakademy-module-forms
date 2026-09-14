@@ -2,6 +2,10 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.7 - 2026-09-14
+
+- Align the module manifest with the merged multi-step form navigation fix.
+
 ## 1.10.2 - 2026-09-14
 
 - Fixed form submissions failing with a 500 TypeError when an authenticated user object has an integer ID.
