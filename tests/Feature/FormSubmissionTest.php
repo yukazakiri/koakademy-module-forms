@@ -92,6 +92,58 @@ it('safely handles non-numeric student identifier lookups without database type 
         ->and($response->links()->firstWhere('model_key', 'student')?->status)->toBe('unmatched');
 });
 
+it('accepts form-data boolean strings for respondent_identity_unverified on submit', function (): void {
+    $form = Form::factory()->create([
+        'access_mode' => FormAccessMode::GuestIdentifier,
+        'identity_type' => 'student_id',
+        'settings' => ['allow_unverified_guest_response' => true],
+    ]);
+    $form->fields()->create([
+        'field_key' => 'notes',
+        'label' => 'Notes',
+        'type' => 'text',
+        'required' => true,
+        'position' => 1,
+    ]);
+    $form->load('fields');
+
+    $response = $this->post(route('forms.submit', ['form' => $form->slug]), [
+        'respondent_identifier' => 'NO-MATCH-123',
+        'respondent_email' => 'guest@example.test',
+        'respondent_identity_unverified' => 'true',
+        'answers' => ['notes' => 'form-data submission'],
+    ]);
+
+    $response->assertRedirect(route('forms.thanks', ['form' => $form->slug]));
+    $this->assertDatabaseHas('form_responses', ['form_id' => $form->getKey(), 'status' => 'submitted']);
+});
+
+it('normalizes form-data boolean strings for respondent_identity_unverified', function (): void {
+    $form = Form::factory()->create([
+        'access_mode' => FormAccessMode::GuestIdentifier,
+        'identity_type' => 'student_id',
+        'settings' => ['allow_unverified_guest_response' => true],
+    ]);
+    $form->fields()->create([
+        'field_key' => 'notes',
+        'label' => 'Notes',
+        'type' => 'text',
+        'required' => true,
+        'position' => 1,
+    ]);
+    $form->load('fields');
+
+    $response = $this->post(route('forms.submit', ['form' => $form->slug]), [
+        'respondent_identifier' => 'NO-MATCH-456',
+        'respondent_email' => 'guardian@example.test',
+        'respondent_identity_unverified' => 'false',
+        'answers' => ['notes' => 'verified false submission'],
+    ]);
+
+    $response->assertRedirect(route('forms.thanks', ['form' => $form->slug]));
+    $this->assertDatabaseHas('form_responses', ['form_id' => $form->getKey(), 'status' => 'submitted']);
+});
+
 it('allows a configured identity to submit a new revision', function (): void {
     $form = Form::factory()->create([
         'access_mode' => FormAccessMode::GuestIdentifier,

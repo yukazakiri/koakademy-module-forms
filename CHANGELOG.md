@@ -2,6 +2,11 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.10 - 2026-09-14
+
+- Fixed public form submission failing on Laravel 13 due to the `boolean` validation rule rejecting form-data string values.
+- Normalized `respondent_identity_unverified` from form-data strings (`"true"`, `"false"`, `"1"`, `"0"`) to real booleans before validation so both matched and unmatched guest submissions can be saved.
+
 ## 1.10.9 - 2026-09-14
 
 - Added automatic student ID generation and age computation when creating student records from reviewed form responses.
