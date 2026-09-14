@@ -299,7 +299,8 @@ export default function PublicFormShow({
     formState.setData("answers", { ...formState.data.answers, [key]: value });
   }
 
-  function goToNextPage(): void {
+  function goToNextPage(event?: React.MouseEvent<HTMLButtonElement>): void {
+    event?.preventDefault();
     const missingField = activeFields.find(
       (field) => field.required && !filled(formState.data.answers[field.key]),
     );

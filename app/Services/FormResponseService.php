@@ -141,11 +141,7 @@ final class FormResponseService
         }
 
         if ($identityUnverified && (bool) data_get($form->settings, 'allow_unverified_guest_response', false)) {
-            try {
-                return $this->guestIdentities->resolve($form, (string) $identifier, (string) $email);
-            } catch (ValidationException) {
-                return null;
-            }
+            return $this->tryResolveGuestRecord($form, $identifier, $email);
         }
 
         try {
@@ -159,9 +155,13 @@ final class FormResponseService
         }
     }
 
-    public function latestResponse(FormResponse $response): FormResponse
+    private function tryResolveGuestRecord(Form $form, ?string $identifier, ?string $email): ?object
     {
-        return $response->loadMissing('form.fields', 'links', 'revisions');
+        try {
+            return $this->guestIdentities->resolve($form, (string) $identifier, (string) $email);
+        } catch (ValidationException) {
+            return null;
+        }
     }
 
     private function findExisting(Form $form, ?string $userId, ?string $email, ?string $identifier): ?FormResponse
