@@ -2,6 +2,12 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.9 - 2026-09-14
+
+- Added automatic student ID generation and age computation when creating student records from reviewed form responses.
+- Handled non-numeric and duplicate student identifiers gracefully during record creation.
+- Preserved non-numeric identifiers in the LRN field if available.
+
 ## 1.10.8 - 2026-09-14
 
 - Prevented Enter key from triggering premature form submission on multi-step forms before the final page.
