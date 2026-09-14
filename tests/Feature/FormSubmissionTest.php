@@ -43,6 +43,55 @@ it('stores an encrypted response and prevents duplicate anonymous identities', f
     $this->assertDatabaseCount('form_response_revisions', 1);
 });
 
+it('accepts form submissions from authenticated users with integer IDs', function (): void {
+    $form = Form::factory()->create([
+        'access_mode' => FormAccessMode::Authenticated,
+    ]);
+    $form->fields()->create([
+        'field_key' => 'notes',
+        'label' => 'Notes',
+        'type' => 'text',
+        'position' => 1,
+    ]);
+    $form->load('fields');
+
+    $service = app(FormResponseService::class);
+    $user = (object) ['id' => 42, 'email' => 'auth@example.test'];
+    $response = $service->submit($form, [
+        'answers' => ['notes' => 'all good'],
+    ], $user);
+
+    expect($response->respondent_user_id)->toBe('42')
+        ->and($response->revisions()->first()->created_by)->toBe('42');
+});
+
+it('safely handles non-numeric student identifier lookups without database type errors', function (): void {
+    $form = Form::factory()->create([
+        'access_mode' => FormAccessMode::GuestIdentifier,
+        'identity_type' => 'student_id',
+        'settings' => ['allow_unverified_guest_response' => true],
+    ]);
+    $form->fields()->create([
+        'field_key' => 'notes',
+        'label' => 'Notes',
+        'type' => 'text',
+        'position' => 1,
+        'mapping' => ['model' => 'student', 'path' => 'student.notes'],
+    ]);
+    $form->load('fields');
+
+    $service = app(FormResponseService::class);
+    $response = $service->submit($form, [
+        'respondent_identifier' => 'unknown-identifier-123',
+        'respondent_email' => 'guest@example.test',
+        'respondent_identity_unverified' => true,
+        'answers' => ['notes' => 'manual review test'],
+    ], null);
+
+    expect($response->respondent_identifier)->toBe('unknown-identifier-123')
+        ->and($response->links()->firstWhere('model_key', 'student')?->status)->toBe('unmatched');
+});
+
 it('allows a configured identity to submit a new revision', function (): void {
     $form = Form::factory()->create([
         'access_mode' => FormAccessMode::GuestIdentifier,

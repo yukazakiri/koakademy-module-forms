@@ -63,7 +63,12 @@ final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, F
         $query = Student::query();
 
         if ($identifierType === 'student_id') {
-            return $query->where('student_id', $identifier)->first();
+            $cleaned = trim($identifier);
+            if (ctype_digit($cleaned) || (is_numeric($cleaned) && ! str_contains($cleaned, '.'))) {
+                return $query->where('student_id', $cleaned)->first();
+            }
+
+            return $query->whereRaw('CAST(student_id AS TEXT) = ?', [$cleaned])->first();
         }
 
         if ($identifierType === 'email') {
