@@ -20,6 +20,20 @@ final class SubmitFormRequest extends FormRequest
             && ($form->access_mode !== FormAccessMode::Authenticated || $this->user() !== null);
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('respondent_identity_unverified')) {
+            return;
+        }
+
+        $value = $this->input('respondent_identity_unverified');
+        if (in_array($value, ['true', 'false', '1', '0', 1, 0], true)) {
+            $this->merge([
+                'respondent_identity_unverified' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            ]);
+        }
+    }
+
     /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
