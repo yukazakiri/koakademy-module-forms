@@ -2,6 +2,15 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.4 - 2026-09-14
+
+- Prevented multi-step section Continue buttons from submitting the entire form.
+- Kept unmatched Student ID and email submissions available for manual review.
+
+## 1.10.3 - 2026-09-14
+
+- Added response CRUD and reviewed-response student record creation.
+
 ## 1.10.2 - 2026-09-14
 
 - Fixed form submissions failing with a 500 TypeError when an authenticated user object has an integer ID.
