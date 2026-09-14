@@ -7,10 +7,8 @@ namespace Modules\Forms\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
-use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Enums\FormAccessMode;
 use Modules\Forms\Http\Requests\ResolveGuestIdentityRequest;
 use Modules\Forms\Http\Requests\SubmitFormRequest;
@@ -32,47 +30,14 @@ final class PublicFormController
 
         return Inertia::render('Forms/PublicShow', [
             'form' => $this->definitions->publicPayload($form->load('fields')),
-            'authenticated' => Auth::check(),
-            'authenticated_guest_profile' => $this->authenticatedGuestProfile($form, $request),
             'hideMobileNavigation' => true,
-            'user' => Auth::user() ? [
-                'name' => data_get(Auth::user(), 'name'),
-                'email' => data_get(Auth::user(), 'email'),
-            ] : null,
         ]);
-    }
-
-    /** @return array<string, mixed>|null */
-    private function authenticatedGuestProfile(Form $form, Request $request): ?array
-    {
-        if (! $request->user()
-            || $form->access_mode !== FormAccessMode::GuestIdentifier
-            || $form->identity_type !== 'student_id'
-            || data_get($form->settings, 'allow_authenticated_guest_prefill') !== true) {
-            return null;
-        }
-
-        $record = app(FormsModelRegistry::class)->resolveForUser('student', $request->user());
-        if ($record === null) {
-            return null;
-        }
-
-        return [
-            'name' => data_get($record, 'full_name')
-                ?? trim(implode(' ', array_filter([
-                    data_get($record, 'first_name'),
-                    data_get($record, 'middle_name'),
-                    data_get($record, 'last_name'),
-                ]))),
-            'student_id' => (string) (data_get($record, 'student_id') ?? ''),
-            'email' => (string) (data_get($record, 'email') ?? data_get($request->user(), 'email') ?? ''),
-            'answers' => $this->definitions->prefillAnswers($form->load('fields'), $record),
-        ];
     }
 
     public function submit(SubmitFormRequest $request, Form $form): RedirectResponse
     {
-        $this->responses->submit($form->load('fields'), $request->validated(), $request->user());
+        $user = $form->access_mode === FormAccessMode::Authenticated ? $request->user() : null;
+        $this->responses->submit($form->load('fields'), $request->validated(), $user);
 
         return redirect()->route('forms.thanks', ['form' => $form->slug]);
     }

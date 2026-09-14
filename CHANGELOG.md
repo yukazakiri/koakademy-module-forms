@@ -2,6 +2,11 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.11 - 2026-09-14
+
+- Removed the portal authentication check and profile prefill prompt from public forms so filling out forms remains standard guest entry.
+- Made `province_of_origin` nullable during validation so forms in directly administered regions like NCR pass submission.
+
 ## 1.10.10 - 2026-09-14
 
 - Fixed public form submission failing on Laravel 13 due to the `boolean` validation rule rejecting form-data string values.

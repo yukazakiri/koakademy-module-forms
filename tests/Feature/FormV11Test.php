@@ -186,61 +186,19 @@ it('marks public form pages to hide the app mobile navigation', function (): voi
         ->and($payload['props']['hideMobileNavigation'])->toBeTrue();
 });
 
-it('offers the authenticated linked student profile for guest identifier forms', function (): void {
-    $registry = Mockery::mock(FormsModelRegistry::class);
-    $student = new stdClass;
-    $student->student_id = '2026-0001';
-    $student->email = 'student@example.test';
-    $student->first_name = 'Ada';
-    $student->middle_name = null;
-    $student->last_name = 'Lovelace';
-    $registry->shouldReceive('resolveForUser')->with('student', Mockery::type(stdClass::class))->andReturn($student);
-    $registry->shouldReceive('read')->andReturnUsing(fn (object $record, string $path): mixed => data_get($record, str_replace('student.', '', $path)));
-    app()->instance(FormsModelRegistry::class, $registry);
-
+it('does not pass authenticated profile props to public guest forms', function (): void {
     $form = Form::factory()->create([
         'access_mode' => FormAccessMode::GuestIdentifier,
         'identity_type' => 'student_id',
-        'settings' => ['allow_authenticated_guest_prefill' => true],
-    ]);
-    $form->fields()->create([
-        'field_key' => 'email',
-        'label' => 'Email',
-        'type' => 'email',
-        'position' => 1,
-        'mapping' => ['model' => 'student', 'path' => 'student.email'],
     ]);
 
     $request = Request::create(route('forms.show', ['form' => $form]), 'GET');
     $request->headers->set('X-Inertia', 'true');
-    $request->setUserResolver(fn (): object => (object) [
-        'id' => 99,
-        'email' => 'portal@example.test',
-    ]);
+    $request->setUserResolver(fn (): object => (object) ['id' => 99, 'email' => 'portal@example.test']);
 
     $payload = json_decode(app(PublicFormController::class)->show($request, $form)->toResponse($request)->getContent(), true, flags: JSON_THROW_ON_ERROR);
 
-    expect($payload['props']['authenticated_guest_profile'])->toMatchArray([
-        'student_id' => '2026-0001',
-        'email' => 'student@example.test',
-        'name' => 'Ada Lovelace',
-        'answers' => ['email' => 'student@example.test'],
-    ]);
-});
-
-it('does not offer authenticated profile prefill when the form setting is disabled', function (): void {
-    $form = Form::factory()->create([
-        'access_mode' => FormAccessMode::GuestIdentifier,
-        'identity_type' => 'student_id',
-        'settings' => ['allow_authenticated_guest_prefill' => false],
-    ]);
-    $request = Request::create(route('forms.show', ['form' => $form]), 'GET');
-    $request->headers->set('X-Inertia', 'true');
-    $request->setUserResolver(fn (): object => (object) ['id' => 99]);
-
-    $payload = json_decode(app(PublicFormController::class)->show($request, $form)->toResponse($request)->getContent(), true, flags: JSON_THROW_ON_ERROR);
-
-    expect($payload['props']['authenticated_guest_profile'])->toBeNull();
+    expect(array_key_exists('authenticated_guest_profile', $payload['props']))->toBeFalse();
 });
 
 it('generates the built-in student template from approved host fields', function (): void {

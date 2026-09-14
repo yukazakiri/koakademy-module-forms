@@ -125,7 +125,8 @@ final class FormDefinitionService
 
                 continue;
             }
-            $fieldRules = [$field->required ? 'required' : 'nullable'];
+            $isProvince = $field->field_key === 'province_of_origin';
+            $fieldRules = [$isProvince ? 'nullable' : ($field->required ? 'required' : 'nullable')];
 
             $fieldRules = [...$fieldRules, ...$this->typeRules($field)];
             $rules[$key] = $fieldRules;
