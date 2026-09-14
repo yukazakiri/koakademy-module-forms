@@ -136,23 +136,15 @@ final class FormResponseService
 
     private function resolveGuestRecord(Form $form, ?string $identifier, ?string $email, bool $identityUnverified): ?object
     {
-        if ($form->access_mode !== FormAccessMode::GuestIdentifier || $form->identity_type !== 'student_id') {
+        if ($form->access_mode !== FormAccessMode::GuestIdentifier || $form->identity_type !== "student_id") {
             return null;
         }
 
-        if ($identityUnverified && (bool) data_get($form->settings, 'allow_unverified_guest_response', false)) {
+        if ((bool) data_get($form->settings, "allow_unverified_guest_response", false)) {
             return $this->tryResolveGuestRecord($form, $identifier, $email);
         }
 
-        try {
-            return $this->guestIdentities->resolve($form, (string) $identifier, (string) $email);
-        } catch (ValidationException $exception) {
-            if ($identityUnverified && (bool) data_get($form->settings, 'allow_unverified_guest_response', false)) {
-                return null;
-            }
-
-            throw $exception;
-        }
+        return $this->guestIdentities->resolve($form, (string) $identifier, (string) $email);
     }
 
     private function tryResolveGuestRecord(Form $form, ?string $identifier, ?string $email): ?object
@@ -162,6 +154,11 @@ final class FormResponseService
         } catch (ValidationException) {
             return null;
         }
+    }
+
+    public function latestResponse(FormResponse $response): FormResponse
+    {
+        return $response->loadMissing("form.fields", "links", "revisions");
     }
 
     private function findExisting(Form $form, ?string $userId, ?string $email, ?string $identifier): ?FormResponse
