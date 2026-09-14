@@ -29,6 +29,9 @@ Route::prefix((string) config('forms.admin_prefix', 'administrators/forms'))->na
     Route::get('/{form}/responses', [FormAdminController::class, 'responses'])->name('responses.index');
     Route::get('/{form}/responses/export', [FormAdminController::class, 'export'])->name('responses.export');
     Route::post('/{form}/responses/{response}/apply', [FormAdminController::class, 'apply'])->name('responses.apply');
+    Route::put('/{form}/responses/{response}', [FormAdminController::class, 'updateResponse'])->name('responses.update');
+    Route::delete('/{form}/responses/{response}', [FormAdminController::class, 'destroyResponse'])->name('responses.delete');
+    Route::post('/{form}/responses/{response}/create-record', [FormAdminController::class, 'createResponseRecord'])->name('responses.create-record');
 });
 
 Route::prefix((string) config('forms.public_prefix', 'forms'))->name('forms.')->middleware('throttle:'.config('forms.submission_throttle', 'forms'))->group(function (): void {

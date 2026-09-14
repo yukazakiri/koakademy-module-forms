@@ -42,8 +42,8 @@ final class FormResponseService
             ? $this->normalizeIdentifier($invitation->recipient_email)
             : $this->normalizeIdentifier($validated['respondent_email'] ?? null);
         $identifier = $this->normalizeIdentifier($validated['respondent_identifier'] ?? null);
-        $userId = data_get($user, 'id');
-        $userId = $userId === null ? null : (string) $userId;
+        $rawUserId = data_get($user, 'id');
+        $userId = $rawUserId === null ? null : (string) $rawUserId;
         $identityUnverified = (bool) ($validated['respondent_identity_unverified'] ?? false);
         $guestRecord = $this->resolveGuestRecord($form, $identifier, $email, $identityUnverified);
 
@@ -140,6 +140,14 @@ final class FormResponseService
             return null;
         }
 
+        if ($identityUnverified && (bool) data_get($form->settings, 'allow_unverified_guest_response', false)) {
+            try {
+                return $this->guestIdentities->resolve($form, (string) $identifier, (string) $email);
+            } catch (ValidationException) {
+                return null;
+            }
+        }
+
         try {
             return $this->guestIdentities->resolve($form, (string) $identifier, (string) $email);
         } catch (ValidationException $exception) {
@@ -149,6 +157,11 @@ final class FormResponseService
 
             throw $exception;
         }
+    }
+
+    public function latestResponse(FormResponse $response): FormResponse
+    {
+        return $response->loadMissing('form.fields', 'links', 'revisions');
     }
 
     private function findExisting(Form $form, ?string $userId, ?string $email, ?string $identifier): ?FormResponse

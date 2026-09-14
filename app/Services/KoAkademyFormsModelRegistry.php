@@ -16,6 +16,8 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Schema;
 use Modules\Forms\Contracts\FormsLockableModelRegistry;
 use Modules\Forms\Contracts\FormsModelRegistry;
+use Modules\Forms\Models\Form;
+use Modules\Forms\Models\FormResponse;
 
 final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, FormsModelRegistry
 {
@@ -181,6 +183,58 @@ final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, F
 
             $record->save();
         }
+    }
+
+    public function createFromResponse(Form $form, FormResponse $response): ?object
+    {
+        if ($form->identity_type !== 'student_id' || ! class_exists(Student::class)) {
+            return null;
+        }
+
+        $answers = app(FormAnswerService::class)->latestAnswers($response);
+        $studentId = $response->respondent_identifier;
+        if ($studentId === null || ! ctype_digit($studentId)) {
+            return null;
+        }
+
+        $attributes = [];
+        foreach ($form->fields as $field) {
+            $mapping = $field->mapping;
+            if (! is_array($mapping) || ($mapping['model'] ?? null) !== 'student' || ! is_string($mapping['path'] ?? null)) {
+                continue;
+            }
+
+            $value = $answers[$field->field_key] ?? null;
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            [, $attribute] = array_pad(explode('.', $mapping['path'], 2), 2, '');
+            if ($attribute !== '' && $this->isPhysicalPath($mapping['path'])) {
+                $attributes[$attribute] = $value;
+            }
+        }
+
+        $attributes['student_id'] = (int) $studentId;
+        $attributes['email'] ??= $response->respondent_email;
+        $tenantId = $form->tenant_key === null ? null : (int) $form->tenant_key;
+        if (Schema::hasColumn('students', 'school_id')) {
+            $attributes['school_id'] ??= $tenantId;
+        }
+        if (Schema::hasColumn('students', 'institution_id')) {
+            $attributes['institution_id'] ??= $tenantId;
+        }
+        $attributes['student_type'] ??= 'college';
+        $attributes['status'] ??= 'applicant';
+        $attributes['privacy_consent_at'] ??= now();
+
+        foreach (['first_name', 'last_name', 'birth_date', 'gender', 'nationality'] as $required) {
+            if (! array_key_exists($required, $attributes) || $attributes[$required] === null || $attributes[$required] === '') {
+                return null;
+            }
+        }
+
+        return Student::query()->create($attributes);
     }
 
     public function lock(object $record): object
