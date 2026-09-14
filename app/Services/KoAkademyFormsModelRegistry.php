@@ -192,8 +192,17 @@ final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, F
         }
 
         $answers = app(FormAnswerService::class)->latestAnswers($response);
-        $studentId = $response->respondent_identifier;
-        if ($studentId === null || ! ctype_digit($studentId)) {
+        $rawId = $response->respondent_identifier;
+        $rawTrimmed = $rawId !== null ? trim($rawId) : '';
+        if ($rawTrimmed !== '' && ctype_digit($rawTrimmed) && ! Student::query()->where('student_id', (int) $rawTrimmed)->exists()) {
+            $studentId = (int) $rawTrimmed;
+        } elseif (method_exists(Student::class, 'generateNextId')) {
+            $studentId = Student::generateNextId();
+        } else {
+            $studentId = null;
+        }
+
+        if ($studentId === null) {
             return null;
         }
 
@@ -215,8 +224,11 @@ final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, F
             }
         }
 
-        $attributes['student_id'] = (int) $studentId;
+        $attributes['student_id'] = $studentId;
         $attributes['email'] ??= $response->respondent_email;
+        if ($rawTrimmed !== '' && ! ctype_digit($rawTrimmed)) {
+            $attributes['lrn'] ??= $rawTrimmed;
+        }
         $tenantId = $form->tenant_key === null ? null : (int) $form->tenant_key;
         if (Schema::hasColumn('students', 'school_id')) {
             $attributes['school_id'] ??= $tenantId;
@@ -226,9 +238,14 @@ final class KoAkademyFormsModelRegistry implements FormsLockableModelRegistry, F
         }
         $attributes['student_type'] ??= 'college';
         $attributes['status'] ??= 'applicant';
+        $attributes['nationality'] ??= 'Filipino';
         $attributes['privacy_consent_at'] ??= now();
 
-        foreach (['first_name', 'last_name', 'birth_date', 'gender', 'nationality'] as $required) {
+        if (isset($attributes['birth_date']) && $attributes['birth_date'] !== null && $attributes['birth_date'] !== '') {
+            $attributes['age'] = Carbon::parse((string) $attributes['birth_date'])->age;
+        }
+
+        foreach (['first_name', 'last_name', 'birth_date', 'gender', 'age'] as $required) {
             if (! array_key_exists($required, $attributes) || $attributes[$required] === null || $attributes[$required] === '') {
                 return null;
             }
