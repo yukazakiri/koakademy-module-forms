@@ -42,7 +42,7 @@ final class FormResponseService
             ? $this->normalizeIdentifier($invitation->recipient_email)
             : $this->normalizeIdentifier($validated['respondent_email'] ?? null);
         $identifier = $this->normalizeIdentifier($validated['respondent_identifier'] ?? null);
-        $rawUserId = data_get($user, 'id');
+        $rawUserId = $form->access_mode === FormAccessMode::Authenticated ? data_get($user, 'id') : null;
         $userId = $rawUserId === null ? null : (string) $rawUserId;
         $identityUnverified = (bool) ($validated['respondent_identity_unverified'] ?? false);
         $guestRecord = $this->resolveGuestRecord($form, $identifier, $email, $identityUnverified);
@@ -165,7 +165,7 @@ final class FormResponseService
     {
         $query = $form->responses();
 
-        if ($userId !== null) {
+        if ($form->access_mode === FormAccessMode::Authenticated && $userId !== null) {
             return $query->where('respondent_user_id', $userId)->latest()->first();
         }
 
@@ -183,6 +183,10 @@ final class FormResponseService
 
         if ($identifier !== null) {
             return $query->where('respondent_identifier_hash', hash('sha256', $identifier))->latest()->first();
+        }
+
+        if ($userId !== null) {
+            return $query->where('respondent_user_id', $userId)->latest()->first();
         }
 
         return null;
