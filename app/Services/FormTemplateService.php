@@ -670,6 +670,9 @@ final class FormTemplateService
     {
         return ! in_array($key, [
             'suffix',
+            'middle_name',
+            'religion',
+            'is_solo_parent_dependent',
             'ethnicity',
             'indigenous_group',
             'pwd_type',

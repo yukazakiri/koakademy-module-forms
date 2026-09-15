@@ -69,7 +69,7 @@ final class FormInvitationController
                 'expires_at' => $invitation->expires_at?->toIso8601String(),
                 'student_name' => data_get($record, 'full_name', data_get($record, 'name')),
             ],
-        ])->withHeaders(['Cache-Control' => 'no-store, private']);
+        ]);
     }
 
     public function submit(SubmitInvitationFormRequest $request, Form $form, string $token): RedirectResponse

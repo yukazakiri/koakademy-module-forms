@@ -2,6 +2,15 @@
 
 All notable changes to `koakademy/forms` are documented here.
 
+## 1.10.13 - 2026-09-15
+
+- Fixed `BadMethodCallException` on invitation show and redirect backs by removing unsupported `withHeaders()` call on Inertia response.
+- Resolved student record during guest identifier and authenticated submission so `missing_only` validation correctly skips populated fields.
+- Relaxed `middle_name`, `religion`, and `is_solo_parent_dependent` profile field requirements in `FormTemplateService`.
+- Redesigned public form flow to hide verification card after student record lookup and show a compact verified status badge.
+- Added pre-submit validation, toast notifications, error banners, and automatic scroll-to-field targeting.
+- Enhanced mobile responsiveness with touch-friendly controls, 44px tap targets, and 16px input font size to prevent mobile browser auto-zoom.
+
 ## 1.10.11 - 2026-09-14
 
 - Removed the portal authentication check and profile prefill prompt from public forms so filling out forms remains standard guest entry.

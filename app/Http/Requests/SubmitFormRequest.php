@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Modules\Forms\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Enums\FormAccessMode;
 use Modules\Forms\Models\Form;
 use Modules\Forms\Services\FormDefinitionService;
+use Modules\Forms\Services\FormGuestIdentityService;
 
 final class SubmitFormRequest extends FormRequest
 {
@@ -42,7 +44,22 @@ final class SubmitFormRequest extends FormRequest
             return [];
         }
 
-        $rules = app(FormDefinitionService::class)->validationRules($form->loadMissing('fields'), answers: (array) $this->input('answers', []));
+        $record = null;
+        if ($form->access_mode === FormAccessMode::Authenticated && $this->user() !== null) {
+            $record = app(FormsModelRegistry::class)->resolveForUser('student', $this->user());
+        } elseif ($form->access_mode === FormAccessMode::GuestIdentifier && $form->identity_type === 'student_id') {
+            try {
+                $record = app(FormGuestIdentityService::class)->resolve(
+                    $form,
+                    (string) $this->input('respondent_identifier'),
+                    (string) $this->input('respondent_email')
+                );
+            } catch (\Throwable) {
+                $record = null;
+            }
+        }
+
+        $rules = app(FormDefinitionService::class)->validationRules($form->loadMissing('fields'), $record, answers: (array) $this->input('answers', []));
 
         if ($form->access_mode === FormAccessMode::GuestIdentifier) {
             $key = $form->identity_type === 'student_id' ? 'respondent_identifier' : 'respondent_email';
