@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use Modules\Forms\Contracts\FormsModelRegistry;
 use Modules\Forms\Enums\FormAccessMode;
@@ -22,6 +23,7 @@ it('stores an encrypted response and prevents duplicate anonymous identities', f
         'required' => true,
         'position' => 1,
     ]);
+
     $form->load('fields');
 
     $service = app(FormResponseService::class);
@@ -142,6 +144,46 @@ it('normalizes form-data boolean strings for respondent_identity_unverified', fu
 
     $response->assertRedirect(route('forms.thanks', ['form' => $form->slug]));
     $this->assertDatabaseHas('form_responses', ['form_id' => $form->getKey(), 'status' => 'submitted']);
+});
+
+it('keeps a submitted response when automatic mapping fails', function (): void {
+    $form = Form::factory()->create([
+        'access_mode' => FormAccessMode::Authenticated,
+        'settings' => ['mapping_mode' => 'auto_fill_empty'],
+    ]);
+    $form->fields()->create([
+        'field_key' => 'notes',
+        'label' => 'Notes',
+        'type' => 'text',
+        'required' => true,
+        'position' => 1,
+        'mapping' => ['model' => 'student', 'path' => 'student.notes'],
+    ]);
+    $form->load('fields');
+
+    $record = new class extends Model {};
+    $record->id = 1;
+    $user = new class {};
+    $user->id = 1;
+
+    $registry = Mockery::mock(FormsModelRegistry::class);
+    $registry->shouldReceive('resolveForUser')->once()->andReturn($record);
+    $registry->shouldReceive('resolveById')->once()->andThrow(new RuntimeException('Mapping failed'));
+    app()->instance(FormsModelRegistry::class, $registry);
+    app()->forgetInstance(FormResponseService::class);
+
+    $response = app(FormResponseService::class)->submit($form, [
+        'answers' => ['notes' => 'Keep this response'],
+    ], $user);
+
+    expect($response->status)->toBe(FormResponseStatus::Submitted)
+        ->and($response->revisions)->toHaveCount(1);
+
+    $this->assertDatabaseHas('form_responses', ['id' => $response->getKey(), 'status' => 'submitted']);
+    $this->assertDatabaseHas('form_audit_events', [
+        'form_response_id' => $response->getKey(),
+        'action' => 'response_mapping_failed',
+    ]);
 });
 
 it('allows a configured identity to submit a new revision', function (): void {

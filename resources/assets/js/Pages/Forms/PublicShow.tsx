@@ -19,7 +19,7 @@ import {
   Send,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { isFormFieldVisible } from "./form-visibility";
 
 interface FormField {
@@ -194,6 +194,7 @@ export default function PublicFormShow({
     useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageError, setPageError] = useState<string | null>(null);
+  const submissionErrorRef = useRef<HTMLDivElement>(null);
   const formLocked =
     requiresStudentVerification && !identityVerified && !identityUnverified;
   const isStudentProfileForm =
@@ -248,7 +249,37 @@ export default function PublicFormShow({
 
   function setAnswer(key: string, value: unknown): void {
     setPageError(null);
+    formState.clearErrors(`answers.${key}`);
     formState.setData("answers", { ...formState.data.answers, [key]: value });
+  }
+
+  function handleSubmissionErrors(errors: Record<string, string>): void {
+    const fieldError = Object.keys(errors).find((key) =>
+      key.startsWith("answers."),
+    );
+
+    if (fieldError) {
+      const fieldKey = fieldError.slice("answers.".length);
+      const sectionIndex = sections.findIndex(([, fields]) =>
+        fields.some((field) => field.key === fieldKey),
+      );
+
+      if (sectionIndex >= 0) {
+        setCurrentPage(sectionIndex);
+      }
+
+      setPageError("Please review the highlighted field before submitting.");
+    } else {
+      setPageError(null);
+    }
+
+    requestAnimationFrame(() => {
+      submissionErrorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      submissionErrorRef.current?.focus();
+    });
   }
 
   function goToNextPage(event?: React.MouseEvent<HTMLButtonElement>): void {
@@ -365,13 +396,20 @@ export default function PublicFormShow({
           form: form.slug,
           token: invitation_token,
         }),
-        { forceFormData: true, preserveScroll: true },
+        {
+          forceFormData: true,
+          preserveScroll: true,
+          preserveState: true,
+          onError: handleSubmissionErrors,
+        },
       );
       return;
     }
     formState.post(publicForms.submit.url(form.slug), {
       forceFormData: true,
       preserveScroll: true,
+      preserveState: true,
+      onError: handleSubmissionErrors,
     });
   }
 
@@ -592,8 +630,51 @@ export default function PublicFormShow({
             }}
             className="flex flex-col gap-5"
           >
-            {form.access_mode === "guest_identifier" && (
-              <section className="border-primary/20 bg-card rounded-xl border p-5 shadow-sm sm:p-6">
+            {formState.errors.form && (
+              <div
+                ref={submissionErrorRef}
+                className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-4 text-sm font-medium shadow-sm"
+                role="alert"
+                aria-live="assertive"
+                tabIndex={-1}
+              >
+                {formState.errors.form}
+              </div>
+            )}
+
+            {requiresStudentVerification && identityVerified && (
+              <div className="border-emerald-500/30 bg-emerald-500/5 flex flex-col gap-3 rounded-xl border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="bg-emerald-500/15 text-emerald-700 flex size-9 shrink-0 items-center justify-center rounded-full dark:text-emerald-300">
+                    <ShieldCheck className="size-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold">
+                      Student record verified
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      Your available profile details were prefilled.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIdentityVerified(false);
+                    formState.setData("answers", {});
+                  }}
+                >
+                  Use another record
+                </Button>
+              </div>
+            )}
+
+            {form.access_mode === "guest_identifier" &&
+              (!requiresStudentVerification ||
+                (!identityVerified && !identityUnverified)) && (
+                <section className="border-primary/20 bg-card rounded-xl border p-5 shadow-sm sm:p-6">
                 {form.identity_type === "student_id" ? (
                   <div className="flex flex-col gap-4">
                     <div>
@@ -737,8 +818,8 @@ export default function PublicFormShow({
                     />
                   </label>
                 )}
-              </section>
-            )}
+                </section>
+              )}
 
             <fieldset disabled={formLocked} className="contents">
               <section key={activeSection} className="flex flex-col gap-4">
@@ -1027,11 +1108,6 @@ export default function PublicFormShow({
               </section>
             </fieldset>
 
-            {formState.errors.form && (
-              <p className="text-destructive text-sm" role="alert">
-                {formState.errors.form}
-              </p>
-            )}
             {pageError && (
               <p className="text-destructive text-sm" role="alert">
                 {pageError}

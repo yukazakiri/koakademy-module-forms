@@ -7,6 +7,7 @@ namespace Modules\Forms\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Modules\Forms\Enums\FormAccessMode;
@@ -37,7 +38,13 @@ final class PublicFormController
     public function submit(SubmitFormRequest $request, Form $form): RedirectResponse
     {
         $user = $form->access_mode === FormAccessMode::Authenticated ? $request->user() : null;
-        $this->responses->submit($form->load('fields'), $request->validated(), $user);
+        $response = $this->responses->submit($form->load('fields'), $request->validated(), $user);
+        Log::info('Public form response submitted', [
+            'form_id' => $form->getKey(),
+            'form_slug' => $form->slug,
+            'response_id' => $response->getKey(),
+            'status' => $response->status->value,
+        ]);
 
         return redirect()->route('forms.thanks', ['form' => $form->slug]);
     }

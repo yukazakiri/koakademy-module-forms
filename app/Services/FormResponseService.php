@@ -16,6 +16,7 @@ use Modules\Forms\Models\Form;
 use Modules\Forms\Models\FormInvitation;
 use Modules\Forms\Models\FormResponse;
 use Modules\Forms\Models\FormResponseLink;
+use Throwable;
 
 final class FormResponseService
 {
@@ -113,7 +114,14 @@ final class FormResponseService
 
             if (data_get($form->settings, 'mapping_mode') === 'auto_fill_empty'
                 && ! ($identityUnverified && $guestRecord === null)) {
-                $response = $this->mapping->apply($response->load('form.fields', 'links'), false, $user);
+                try {
+                    $response = $this->mapping->apply($response->load('form.fields', 'links'), false, $user);
+                } catch (Throwable $exception) {
+                    report($exception);
+                    $this->audit->record($form, 'response_mapping_failed', $response, [
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
             }
 
             if ($invitation instanceof FormInvitation) {
